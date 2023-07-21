@@ -212,6 +212,7 @@ void buildLightMatFromJSON(const std::string& fileName,
                     lightMat(lightIndex, cpt) = direction.second.get_value<float>();
                     ++cpt;
                 }
+                break;
             }
             else
             {
@@ -234,6 +235,7 @@ void buildLightMatFromJSON(const std::string& fileName,
                         ++cpt;
                     }
                     ++lineNumber;
+                    break;
                 }
             }
         }
