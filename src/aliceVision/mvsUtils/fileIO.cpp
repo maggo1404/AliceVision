@@ -339,6 +339,10 @@ std::string getFileNameFromViewId(const MultiViewParams& mp,
             ext = "obj";
             break;
         }
+        case EFileType::none:
+        {
+            ALICEVISION_THROW_ERROR("FileType is None");
+        }
     }
 
     const std::string fileName = folder + std::to_string(viewId) + suffix + customSuffix + tileSuffix + "." + ext;
