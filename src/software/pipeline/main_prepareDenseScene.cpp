@@ -298,11 +298,6 @@ bool prepareDenseScene(const SfMData& sfmData,
                         image(pix).a() = (maskLoaded && mask(pix) == 0) ? 0.f : (doMaskLandmarks && maskLandmarks(pix) == 127) ? .5f : 1.f;
                     }
                 });
-            /* else
-            {
-                const auto noMaskingFunc = [] (Image<RGBAfColor> & image) {};
-                process<Image<RGBAfColor>>(dstColorImage, cam, metadata, srcImage, evCorrection, exposureCompensation, noMaskingFunc);
-            }*/
         }
 
         ++progressDisplay;
@@ -413,8 +408,8 @@ int aliceVision_main(int argc, char *argv[])
     }
 
     // export
-    if(prepareDenseScene(sfmData, imagesFolders, masksFolders, maskExtension, rangeStart, rangeEnd, outFolder, outputFileType,
-                         saveMetadata, saveMatricesTxtFiles, evCorrection, landmarksMaskScale))
+    if(prepareDenseScene(sfmData, imagesFolders, masksFolders, maskExtension, rangeStart, rangeEnd, outFolder,
+                         outputFileType, saveMetadata, saveMatricesTxtFiles, evCorrection, landmarksMaskScale))
         return EXIT_SUCCESS;
 
     return EXIT_FAILURE;
