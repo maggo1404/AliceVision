@@ -334,21 +334,22 @@ if(ALICEVISION_BUILD_SFM)
         target_link_libraries(aliceVision_rigLocalization_exe PUBLIC CCTag::CCTag)
     endif()
 
-    # Prepare dense scene for MVS
-    alicevision_add_software(aliceVision_prepareDenseScene
-        SOURCE main_prepareDenseScene.cpp
-        FOLDER ${FOLDER_SOFTWARE_PIPELINE}
-        LINKS aliceVision_system
-              aliceVision_cmdline
-              aliceVision_image
-              aliceVision_feature
-              aliceVision_sfmData
-              aliceVision_sfmDataIO
-              Boost::program_options
-              Boost::filesystem
-              Boost::boost
-              Boost::timer
-    )
+  # Prepare dense scene for MVS
+  alicevision_add_software(aliceVision_prepareDenseScene
+    SOURCE main_prepareDenseScene.cpp
+    FOLDER ${FOLDER_SOFTWARE_PIPELINE}
+    LINKS aliceVision_system
+          aliceVision_cmdline
+          aliceVision_image
+          aliceVision_feature
+          aliceVision_sfmData
+          aliceVision_sfmDataIO
+          Boost::program_options
+          Boost::filesystem
+          Boost::boost
+          Boost::timer
+          nanoflann
+  )
 
   # Filter SfM data
   alicevision_add_software(aliceVision_filterSfM
