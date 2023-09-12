@@ -318,7 +318,7 @@ int main(int argc, char** argv)
   }
 
   // initialization
-  mvsUtils::MultiViewParams mp(sfmData, imagesFolder, "", depthMapsFilterFolder, false);
+  mvsUtils::MultiViewParams mp(sfmData, imagesFolder, "", depthMapsFilterFolder, mvsUtils::EFileType::none);
 
   lightingEstimation::LighthingEstimator estimator;
 
