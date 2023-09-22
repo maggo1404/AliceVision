@@ -76,7 +76,29 @@ void process(const std::string &dstColorImage, const IntrinsicBase* cam, const o
     }
 }
 
-bool prepareDenseScene(SfMData& sfmData,
+using ObservationsPerView = stl::flat_map<std::size_t, std::vector<const Observation*>>;
+
+/**
+ * @brief Get the landmark observations of camera views.
+ * @param[in] sfmData: A given SfMData
+ * @return Observations per camera view
+ */
+ObservationsPerView getObservationsPerViews(const SfMData& sfmData)
+{
+    ObservationsPerView observationsPerView;
+    for(auto& landIt : sfmData.getLandmarks())
+    {
+        for(const auto& obsIt : landIt.second.observations)
+        {
+            IndexT viewId = obsIt.first;
+            auto& observationsSet = observationsPerView[viewId];
+            observationsSet.push_back(&obsIt.second);
+        }
+    }
+    return observationsPerView;
+}
+
+bool prepareDenseScene(const SfMData& sfmData,
                        const std::vector<std::string>& imagesFolders,
                        const std::vector<std::string>& masksFolders,
                        const std::string& maskExtension,
@@ -126,7 +148,7 @@ bool prepareDenseScene(SfMData& sfmData,
     ALICEVISION_LOG_INFO("Median Camera Exposure: " << medianCameraExposure << ", Median EV: " << std::log2(1.0/medianCameraExposure));
 
     bool doMaskLandmarks = landmarksMaskScale > 0.f;
-    sfmData::ObservationsPerView observationsPerView;
+    ObservationsPerView observationsPerView;
     HashMap<IndexT, double> estimatedRadii;
     if (doMaskLandmarks)
     {
@@ -301,7 +323,7 @@ bool prepareDenseScene(SfMData& sfmData,
                 const auto& observationsIt = observationsPerView.find(viewId);
                 if(observationsIt != observationsPerView.end())
                 {
-                    const auto& observations = observationsIt->second.first;
+                    const auto& observations = observationsIt->second;
                     int j = 0;
                     for(const auto& observation : observations)
                     {
