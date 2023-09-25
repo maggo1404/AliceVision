@@ -194,6 +194,9 @@ void buildLightMatFromJSON(const std::string& fileName,
         int cpt = 0;
         for (auto& light : fileTree.get_child("lights"))
         {
+            if (lineNumber == lightMat.rows())
+                break;
+
             IndexT lightIndex = light.second.get<IndexT>("lightId", UndefinedIndexT);
             if (lightIndex != UndefinedIndexT)
             {
@@ -204,14 +207,13 @@ void buildLightMatFromJSON(const std::string& fileName,
                     ++cpt;
                 }
                 intList.push_back(currentIntensities);
-
                 cpt = 0;
                 for (auto& direction : light.second.get_child("direction"))
                 {
-                    lightMat(lightIndex, cpt) = direction.second.get_value<float>();
+                    lightMat(lineNumber, cpt) = direction.second.get_value<float>();
                     ++cpt;
                 }
-                break;
+                ++lineNumber;
             }
             else
             {
