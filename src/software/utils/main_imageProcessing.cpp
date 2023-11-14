@@ -1823,8 +1823,6 @@ int aliceVision_main(int argc, char * argv[])
                 writeOptions.storageDataType(storageDataType);
             }
 
-            ALICEVISION_LOG_INFO("outputColorSpace: " << outputColorSpace);
-
             // Save the image
             saveImage(image, inputFilePath, outputFilePath, md, metadataFolders, outputFormat, writeOptions);
         }
