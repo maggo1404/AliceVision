@@ -354,11 +354,11 @@ void photometricStereo(const std::vector<std::string>& imageList,
 
     int numberOfMasks = 1;
 
-    while (numberOfPixels > sizeMax/imageList.size())
+    while (numberOfPixels > sizeMax / imageList.size())
     {
         numberOfMasks = numberOfMasks * 2;
         auxMaskSize = floor(auxMaskSize / 2);
-        numberOfPixels = 3*auxMaskSize;
+        numberOfPixels = 3 * auxMaskSize;
     }
 
     Eigen::MatrixXf normalsVect = Eigen::MatrixXf::Zero(3, pictRows * pictCols);

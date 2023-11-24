@@ -81,7 +81,7 @@ void lightCalibration(const sfmData::SfMData& sfmData,
                 imageList.push_back(imagePath.string());
 
                 std::array<float, 3> currentSphereParams;
-                for (auto& currentSphere: fileTree.get_child(sphereName))
+                for (auto& currentSphere : fileTree.get_child(sphereName))
                 {
                     currentSphereParams[0] = currentSphere.second.get_child("").get("x", 0.0);
                     currentSphereParams[1] = currentSphere.second.get_child("").get("y", 0.0);
@@ -101,7 +101,7 @@ void lightCalibration(const sfmData::SfMData& sfmData,
     }
 
     int lightSize = 3;
-    if(!method.compare("SH"))
+    if (!method.compare("SH"))
         lightSize = 9;
 
     Eigen::MatrixXf lightMat(imageList.size(), lightSize);
@@ -156,7 +156,7 @@ void lightCalibrationOneImage(const std::string& picturePath,
 
         // Evaluate lighting direction :
         lightingDirection = 2 * normalBrightestPoint.dot(observationRayPersp) * normalBrightestPoint - observationRayPersp;
-        lightingDirection = lightingDirection/lightingDirection.norm();
+        lightingDirection = lightingDirection / lightingDirection.norm();
 
         intensity = 1.0;
     }
@@ -183,7 +183,7 @@ void lightCalibrationOneImage(const std::string& picturePath,
             for (int i = 0; i < patch.rows(); ++i)
             {
                 const float distanceToCenter = std::sqrt((i - radius) * (i - radius) + (j - radius) * (j - radius));
-                if ((distanceToCenter < 0.95 * radius) && (patch(i,j) > 0.1) && (patch(i,j) < 0.98))
+                if ((distanceToCenter < 0.95 * radius) && (patch(i, j) > 0.1) && (patch(i, j) < 0.98))
                 {
                     // imSphere = normalSphere.s
                     imSphere(currentIndex) = patch(i, j);
@@ -206,10 +206,10 @@ void lightCalibrationOneImage(const std::string& picturePath,
         lightingDirection = normalSphere.colPivHouseholderQr().solve(imSphere);
 
         intensity = lightingDirection.norm();
-        lightingDirection = lightingDirection/intensity;
+        lightingDirection = lightingDirection / intensity;
     }
 
-    //If method = SH :
+    // If method = SH :
     else if (!method.compare("SH"))
     {
         size_t lightSize = lightingDirection.size();
@@ -234,21 +234,23 @@ void lightCalibrationOneImage(const std::string& picturePath,
             for (size_t i = 0; i < patch.rows(); ++i)
             {
                 float distanceToCenter = sqrt((i - radius) * (i - radius) + (j - radius) * (j - radius));
-                if (distanceToCenter < 0.95*radius && (patch(i,j) > 0.1) && (patch(i,j) < 0.98))
+                if (distanceToCenter < 0.95 * radius && (patch(i, j) > 0.1) && (patch(i, j) < 0.98))
                 {
-                    imSphere(currentIndex) = patch(i,j);
+                    imSphere(currentIndex) = patch(i, j);
 
                     normalSphere(currentIndex, 0) = (float(j) - radius) / radius;
                     normalSphere(currentIndex, 1) = (float(i) - radius) / radius;
-                    normalSphere(currentIndex, 2) = -sqrt(1 - normalSphere(currentIndex, 0) * normalSphere(currentIndex, 0) - normalSphere(currentIndex, 1) * normalSphere(currentIndex, 1));
+                    normalSphere(currentIndex, 2) = -sqrt(1 - normalSphere(currentIndex, 0) * normalSphere(currentIndex, 0) -
+                                                          normalSphere(currentIndex, 1) * normalSphere(currentIndex, 1));
                     normalSphere(currentIndex, 3) = 1;
-                    if(lightSize > 4)
+                    if (lightSize > 4)
                     {
-                        normalSphere(currentIndex, 4) = normalSphere(currentIndex,0)*normalSphere(currentIndex,1);
-                        normalSphere(currentIndex, 5) = normalSphere(currentIndex,0)*normalSphere(currentIndex,2);
-                        normalSphere(currentIndex, 6) = normalSphere(currentIndex,1)*normalSphere(currentIndex,2);
-                        normalSphere(currentIndex, 7) = normalSphere(currentIndex,0)*normalSphere(currentIndex,0) - normalSphere(currentIndex,1)*normalSphere(currentIndex,1);
-                        normalSphere(currentIndex, 8) = 3*normalSphere(currentIndex,2)*normalSphere(currentIndex,2) - 1;
+                        normalSphere(currentIndex, 4) = normalSphere(currentIndex, 0) * normalSphere(currentIndex, 1);
+                        normalSphere(currentIndex, 5) = normalSphere(currentIndex, 0) * normalSphere(currentIndex, 2);
+                        normalSphere(currentIndex, 6) = normalSphere(currentIndex, 1) * normalSphere(currentIndex, 2);
+                        normalSphere(currentIndex, 7) = normalSphere(currentIndex, 0) * normalSphere(currentIndex, 0) -
+                                                        normalSphere(currentIndex, 1) * normalSphere(currentIndex, 1);
+                        normalSphere(currentIndex, 8) = 3 * normalSphere(currentIndex, 2) * normalSphere(currentIndex, 2) - 1;
                     }
                     ++currentIndex;
                 }
@@ -261,22 +263,21 @@ void lightCalibrationOneImage(const std::string& picturePath,
         Eigen::VectorXf imSphereMasked(currentIndex);
         imSphereMasked = imSphere.head(currentIndex);
 
-
         // 1) Directionnal part estimation :
         Eigen::MatrixXf normalOrdre1(currentIndex, 3);
         normalOrdre1 = normalSphereMasked.leftCols(3);
         Eigen::Vector3f directionnalPart = normalOrdre1.colPivHouseholderQr().solve(imSphereMasked);
         intensity = directionnalPart.norm();
-        directionnalPart = directionnalPart/intensity;
+        directionnalPart = directionnalPart / intensity;
 
         // 2) Other order estimation :
         Eigen::VectorXf imSphereModif(currentIndex);
         imSphereModif = imSphereMasked;
-        for(size_t i = 0; i < currentIndex; ++i)
+        for (size_t i = 0; i < currentIndex; ++i)
         {
             for (size_t k = 0; k < 3; ++k)
             {
-                imSphereModif(i) -= normalSphereMasked(i, k)*directionnalPart(k);
+                imSphereModif(i) -= normalSphereMasked(i, k) * directionnalPart(k);
             }
         }
         Eigen::VectorXf secondOrder(6);
@@ -411,7 +412,6 @@ void writeJSON(const std::string& fileName,
                 lightTree.put("type", "SH");
             else
                 lightTree.put("type", "directional");
-
 
             // Light direction
             bpt::ptree directionNode;
