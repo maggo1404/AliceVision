@@ -5,6 +5,24 @@
 set(FOLDER_SOFTWARE_CONVERT "Software/Convert")
 
 if(ALICEVISION_BUILD_SFM)
+
+    find_package(E57Format REQUIRED)
+    if (TARGET E57Format)
+        # Convert SfMData format (from one to another)
+        alicevision_add_software(aliceVision_importe57
+            SOURCE main_importe57.cpp
+            FOLDER ${FOLDER_SOFTWARE_CONVERT}
+            LINKS aliceVision_system
+                aliceVision_cmdline
+                aliceVision_feature
+                aliceVision_sfmData
+                aliceVision_sfmDataIO
+                Boost::program_options
+                Boost::system
+                E57Format
+        )
+    endif()
+
     # Convert SfMData format (from one to another)
     alicevision_add_software(aliceVision_convertSfMFormat
         SOURCE main_convertSfMFormat.cpp
