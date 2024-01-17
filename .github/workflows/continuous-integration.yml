@@ -22,7 +22,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     container:
-      image: alicevision/alicevision-deps:2023.10.12-centos7-cuda11.3.1
+      image: alicevision/alicevision-deps:2024.01.16-centos7-cuda11.3.1
     env:
       DEPS_INSTALL_DIR: /opt/AliceVision_install
       BUILD_TYPE: Release
@@ -52,6 +52,7 @@ jobs:
            -DTARGET_ARCHITECTURE=core \
            -DALICEVISION_BUILD_TESTS:BOOL=ON \
            -DALICEVISION_BUILD_EXAMPLES:BOOL=ON \
+           -DALICEVISION_BUILD_SWIG_BINDING:BOOL=ON \
            -DALICEVISION_USE_OPENCV:BOOL=ON \
            -DALICEVISION_USE_CUDA:BOOL=ON \
            -DALICEVISION_USE_CCTAG:BOOL=ON \
