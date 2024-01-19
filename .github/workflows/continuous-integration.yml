@@ -22,7 +22,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     container:
-      image: alicevision/alicevision-deps:2024.01.16-centos7-cuda11.3.1
+      image: alicevision/alicevision-deps:2024.01.19-centos7-cuda11.3.1
     env:
       DEPS_INSTALL_DIR: /opt/AliceVision_install
       BUILD_TYPE: Release
@@ -64,7 +64,9 @@ jobs:
            -DBOOST_NO_CXX11:BOOL=ON \
            -DCeres_DIR:PATH="${DEPS_INSTALL_DIR}/share/Ceres" \
            -DEIGEN_INCLUDE_DIR_HINTS:PATH="${DEPS_INSTALL_DIR}" \
-           -DAlembic_DIR:PATH="${DEPS_INSTALL_DIR}/lib/cmake/Alembic"
+           -DAlembic_DIR:PATH="${DEPS_INSTALL_DIR}/lib/cmake/Alembic" \
+           -DSWIG_DIR:PATH="${DEPS_INSTALL_DIR}/share/swig" \
+           -DSWIG_EXECUTABLE:PATH="${DEPS_INSTALL_DIR}/bin-deps/swig"
 
       - name: Build
         working-directory: ./build
