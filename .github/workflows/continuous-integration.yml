@@ -219,6 +219,10 @@ jobs:
           # This input tells run-cmake to consume the vcpkg.cmake toolchain file set by run-vcpkg.
           cmakeBuildType: Release
           buildWithCMake: true
+       - uses: actions/upload-artifact@v3
+         with:
+           name: Build
+           path: ${{ env.buildDir }}
 
       - name: UnitTests
         uses: lukka/run-cmake@v3
