@@ -37,25 +37,7 @@ using namespace aliceVision::geometry;
  */
 ceres::CostFunction* createCostFunctionFromIntrinsics(const std::shared_ptr<IntrinsicBase> intrinsic, const sfmData::Observation& observation)
 {
-    // Apply undistortion to observation
-    sfmData::Observation obsUndistorted = observation;
-    std::shared_ptr<camera::IntrinsicScaleOffsetDisto> intrinsicDistortion = std::dynamic_pointer_cast<camera::IntrinsicScaleOffsetDisto>(intrinsic);
-    if (intrinsicDistortion)
-    {
-        auto undistortion = intrinsicDistortion->getUndistortion();
-        if (undistortion)
-        {
-            obsUndistorted.setCoordinates(undistortion->undistort(observation.getCoordinates()));
-
-            if (intrinsicDistortion->getDistortion() != nullptr)
-            {
-                throw std::runtime_error("Distortion should not be there when undistortion exists");
-            }
-        }
-    }
-  
-
-    auto costFunction = new ceres::DynamicAutoDiffCostFunction<ProjectionSimpleErrorFunctor>(new ProjectionSimpleErrorFunctor(obsUndistorted, intrinsic));
+    auto costFunction = new ceres::DynamicAutoDiffCostFunction<ProjectionSimpleErrorFunctor>(new ProjectionSimpleErrorFunctor(observation, intrinsic));
 
     costFunction->AddParameterBlock(intrinsic->getParams().size());
     costFunction->AddParameterBlock(6);
@@ -73,25 +55,7 @@ ceres::CostFunction* createCostFunctionFromIntrinsics(const std::shared_ptr<Intr
  */
 ceres::CostFunction* createRigCostFunctionFromIntrinsics(std::shared_ptr<IntrinsicBase> intrinsic, const sfmData::Observation& observation)
 {
-    // Apply undistortion to observation
-    sfmData::Observation obsUndistorted = observation;
-    std::shared_ptr<camera::IntrinsicScaleOffsetDisto> intrinsicDistortion = std::dynamic_pointer_cast<camera::IntrinsicScaleOffsetDisto>(intrinsic);
-    if (intrinsicDistortion)
-    {
-        auto undistortion = intrinsicDistortion->getUndistortion();
-        if (undistortion)
-        {
-            obsUndistorted.setCoordinates(undistortion->undistort(observation.getCoordinates()));
-
-            if (intrinsicDistortion->getDistortion() != nullptr)
-            {
-                throw std::runtime_error("Distortion should not be there when undistortion exists");
-            }
-        }
-    }
-  
-
-    auto costFunction = new ceres::DynamicAutoDiffCostFunction<ProjectionErrorFunctor>(new ProjectionErrorFunctor(obsUndistorted, intrinsic));
+    auto costFunction = new ceres::DynamicAutoDiffCostFunction<ProjectionErrorFunctor>(new ProjectionErrorFunctor(observation, intrinsic));
 
     costFunction->AddParameterBlock(intrinsic->getParams().size());
     costFunction->AddParameterBlock(6);
