@@ -620,7 +620,7 @@ if(AV_BUILD_BOOST)
     endif()
     
     ExternalProject_Add(${BOOST_TARGET}
-        URL https://boostorg.jfrog.io/artifactory/main/release/1.84.0/source/boost_1_84_0.tar.bz2
+        URL https://archives.boost.io/release/1.84.0/source/boost_1_84_0.tar.bz2
         URL_HASH MD5=9dcd632441e4da04a461082ebbafd337
         DOWNLOAD_DIR ${BUILD_DIR}/download/boost
         PREFIX ${BUILD_DIR}
@@ -630,15 +630,15 @@ if(AV_BUILD_BOOST)
         SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/boost
         BINARY_DIR ${BUILD_DIR}/boost_build
         INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
-        CONFIGURE_COMMAND 
-            cd <SOURCE_DIR> && 
+        CONFIGURE_COMMAND
+            cd <SOURCE_DIR> &&
             ./bootstrap.${SCRIPT_EXTENSION} --prefix=<INSTALL_DIR> --with-libraries=atomic,container,date_time,exception,graph,iostreams,json,log,math,program_options,regex,serialization,system,test,thread,stacktrace,timer
-        BUILD_COMMAND 
-            cd <SOURCE_DIR> && 
+        BUILD_COMMAND
+            cd <SOURCE_DIR> &&
             ./b2 --prefix=<INSTALL_DIR> variant=${DEPS_CMAKE_BUILD_TYPE_LOWERCASE} cxxstd=17 link=shared threading=multi -j8
-        INSTALL_COMMAND 
-            cd <SOURCE_DIR> && 
-            ./b2 variant=${DEPS_CMAKE_BUILD_TYPE_LOWERCASE}  cxxstd=17 link=shared threading=multi install
+        INSTALL_COMMAND
+            cd <SOURCE_DIR> &&
+            ./b2 variant=${DEPS_CMAKE_BUILD_TYPE_LOWERCASE} cxxstd=17 link=shared threading=multi install
         DEPENDS ${ZLIB_TARGET}
     )
 
