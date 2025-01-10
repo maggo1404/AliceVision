@@ -13,8 +13,8 @@ namespace sfm {
 
 struct ConstraintPointErrorFunctor
 {
-    explicit ConstraintPointErrorFunctor(const Vec3 & normal, const Vec3 & point)        
-    : _normal(normal)
+    explicit ConstraintPointErrorFunctor(const double weight, const Vec3 & normal, const Vec3 & point)        
+    : _weight(weight), _normal(normal)
     {        
         _constraintDistance = _normal.dot(point);
     }
@@ -25,11 +25,12 @@ struct ConstraintPointErrorFunctor
         const T* parameter_point = parameters[0];
         
         T distance = parameter_point[0] * _normal[0] + parameter_point[1] * _normal[1] + parameter_point[2] * _normal[2];
-        residuals[0] = 100.0 * (distance - _constraintDistance);
+        residuals[0] = _weight * (distance - _constraintDistance);
 
         return true;
     }
 
+    double _weight;
     Vec3 _normal;
     double _constraintDistance;
 };

@@ -89,7 +89,8 @@ ceres::CostFunction* createConstraintsCostFunctionFromIntrinsics(std::shared_ptr
 
 ceres::CostFunction* createCostFunctionFromContraintPoint(const sfmData::Landmark & landmark, const Vec3 & normal)
 {
-    auto costFunction = new ceres::DynamicAutoDiffCostFunction<ConstraintPointErrorFunctor>(new ConstraintPointErrorFunctor(normal, landmark.X));
+    const double weight = 100.0;
+    auto costFunction = new ceres::DynamicAutoDiffCostFunction<ConstraintPointErrorFunctor>(new ConstraintPointErrorFunctor(weight, normal, landmark.X));
 
     costFunction->AddParameterBlock(3);
     costFunction->SetNumResiduals(1);
