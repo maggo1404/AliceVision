@@ -110,9 +110,20 @@ bool getPoseFromJson(const boost::json::object& obj, ERotationFormat format, Pos
     t.y() = boost::json::value_to<double>(obj.at("ty"));
     t.z() = boost::json::value_to<double>(obj.at("tz"));
 
-    readPose.T = Eigen::Matrix4d::Identity();
-    readPose.T.block<3, 3>(0, 0) = R;
-    readPose.T.block<3, 1>(0, 3) = t;
+    Eigen::Matrix4d world_T_camera = Eigen::Matrix4d::Identity();
+    world_T_camera.block<3, 3>(0, 0) = R;
+    world_T_camera.block<3, 1>(0, 3) = t;
+
+    //Get transform in av coordinates
+    Eigen::Matrix4d aliceTinput = Eigen::Matrix4d::Identity();
+    aliceTinput(1, 1) = -1;
+    aliceTinput(1, 2) = 0;
+    aliceTinput(2, 1) = 0;
+    aliceTinput(2, 2) = -1;
+
+
+    world_T_camera = aliceTinput * world_T_camera * aliceTinput.inverse();
+    readPose.T = world_T_camera.inverse();
 
     return true;
 }
