@@ -42,6 +42,14 @@ IndexT removeOutliersWithPixelResidualError(sfmData::SfMData& sfmData,
 // Return the number of removed tracks
 IndexT removeOutliersWithAngleError(sfmData::SfMData& sfmData, const double dMinAcceptedAngle);
 
+/**
+ * @Brief remove all point constraints which are too far away from their associated landmark
+ * @param sfmData the sfmData  to update
+ * @param maxDist the maximal allowed distance between the landmark and the constraint
+ * @return the number of constraints removed
+ */
+IndexT removeConstraints(sfmData::SfMData& sfmData, const double maxDist);
+
 bool eraseUnstablePoses(sfmData::SfMData& sfmData, const IndexT minPointsPerPose, std::set<IndexT>* outRemovedViewsId = NULL);
 
 bool eraseObservationsWithMissingPoses(sfmData::SfMData& sfmData, const IndexT minPointsPerLandmark);

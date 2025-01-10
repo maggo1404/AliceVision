@@ -1,4 +1,5 @@
 // This file is part of the AliceVision project.
+// Copyright (c) 2025 AliceVision contributors.
 // Copyright (c) 2024 AliceVision contributors.
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -94,6 +95,7 @@ private:
     EFeatureConstraint _featureConstraint = EFeatureConstraint::SCALE;
     double _maxReprojectionError = 4.0;
     double _minAngleForLandmark = 2.0;
+    double _maxConstraintDistance = 1.0;
     size_t _minTrackLength = 2;
     size_t _minPointsPerPose = 30;
     size_t _bundleAdjustmentMaxOutlier = 50;
