@@ -24,6 +24,9 @@ set(sfm_files_headers
   pipeline/RelativePoseInfo.hpp
   pipeline/structureFromKnownPoses/StructureEstimationFromKnownPoses.hpp
   pipeline/panorama/ReconstructionEngine_panorama.hpp
+  pipeline/bootstrapping/EstimateAngle.hpp
+  pipeline/bootstrapping/PairsScoring.hpp
+  pipeline/bootstrapping/Bootstrap.hpp
   pipeline/expanding/SfmTriangulation.hpp
   pipeline/expanding/SfmResection.hpp
   pipeline/expanding/SfmBundle.hpp
@@ -65,6 +68,9 @@ set(sfm_files_sources
   pipeline/RelativePoseInfo.cpp
   pipeline/structureFromKnownPoses/StructureEstimationFromKnownPoses.cpp
   pipeline/panorama/ReconstructionEngine_panorama.cpp
+  pipeline/bootstrapping/EstimateAngle.cpp
+  pipeline/bootstrapping/PairsScoring.cpp
+  pipeline/bootstrapping/Bootstrap.cpp
   pipeline/expanding/SfmTriangulation.cpp
   pipeline/expanding/SfmResection.cpp
   pipeline/expanding/SfmBundle.cpp
