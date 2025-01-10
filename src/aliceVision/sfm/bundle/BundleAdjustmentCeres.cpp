@@ -7,6 +7,7 @@
 
 #include <aliceVision/sfm/bundle/BundleAdjustmentCeres.hpp>
 #include <aliceVision/sfm/bundle/costfunctions/constraint2d.hpp>
+#include <aliceVision/sfm/bundle/costfunctions/constraintPoint.hpp>
 #include <aliceVision/sfm/bundle/costfunctions/projection.hpp>
 #include <aliceVision/sfm/bundle/costfunctions/rotationPrior.hpp>
 #include <aliceVision/sfm/bundle/manifolds/intrinsics.hpp>
@@ -82,6 +83,16 @@ ceres::CostFunction* createConstraintsCostFunctionFromIntrinsics(std::shared_ptr
     costFunction->AddParameterBlock(6);
     costFunction->AddParameterBlock(6);
     costFunction->SetNumResiduals(2);
+
+    return costFunction;
+}
+
+ceres::CostFunction* createCostFunctionFromContraintPoint(const sfmData::Landmark & landmark, const Vec3 & normal)
+{
+    auto costFunction = new ceres::DynamicAutoDiffCostFunction<ConstraintPointErrorFunctor>(new ConstraintPointErrorFunctor(normal, landmark.X));
+
+    costFunction->AddParameterBlock(3);
+    costFunction->SetNumResiduals(1);
 
     return costFunction;
 }
@@ -671,6 +682,33 @@ void BundleAdjustmentCeres::addConstraints2DToProblem(const sfmData::SfMData& sf
     }
 }
 
+void BundleAdjustmentCeres::addConstraintsPointToProblem(const sfmData::SfMData& sfmData, ERefineOptions refineOptions, ceres::Problem& problem)
+{
+    // set a LossFunction to be less penalized by false measurements.
+    // note: set it to NULL if you don't want use a lossFunction.
+    ceres::LossFunction* lossFunction = _ceresOptions.lossFunction.get();
+
+    for (const auto& [landmarkId, constraint] : sfmData.getConstraintsPoint())
+    {
+        if (sfmData.getLandmarks().find(landmarkId) == sfmData.getLandmarks().end())
+        {
+            continue;
+        }
+
+        if (_landmarksBlocks.find(landmarkId) == _landmarksBlocks.end())
+        {
+            continue;
+        }
+
+        const sfmData::Landmark & l = sfmData.getLandmarks().at(landmarkId);
+        double * ldata = _landmarksBlocks.at(landmarkId).data();
+
+        ceres::CostFunction* costFunction = createCostFunctionFromContraintPoint(l, constraint.normal);
+        
+        problem.AddResidualBlock(costFunction, lossFunction, ldata);
+    }
+}
+
 void BundleAdjustmentCeres::addRotationPriorsToProblem(const sfmData::SfMData& sfmData, ERefineOptions refineOptions, ceres::Problem& problem)
 {
     // set a LossFunction to be less penalized by false measurements.
@@ -717,6 +755,9 @@ void BundleAdjustmentCeres::createProblem(const sfmData::SfMData& sfmData, ERefi
 
     // add 2D constraints to the Ceres problem
     addConstraints2DToProblem(sfmData, refineOptions, problem);
+
+    // add 2D constraints to the Ceres problem
+    addConstraintsPointToProblem(sfmData, refineOptions, problem);
 
     // add rotation priors to the Ceres problem
     addRotationPriorsToProblem(sfmData, refineOptions, problem);
