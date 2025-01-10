@@ -10,6 +10,7 @@
 #include <aliceVision/sfmData/CameraPose.hpp>
 #include <aliceVision/sfmData/Landmark.hpp>
 #include <aliceVision/sfmData/Constraint2D.hpp>
+#include <aliceVision/sfmData/ConstraintPoint.hpp>
 #include <aliceVision/sfmData/RotationPrior.hpp>
 #include <aliceVision/sfmData/View.hpp>
 #include <aliceVision/sfmData/Rig.hpp>
@@ -50,6 +51,9 @@ using LandmarksUncertainty = std::map<IndexT, Vec3>;
 /// Define a collection of constraints
 using Constraints2D = std::vector<Constraint2D>;
 
+/// Define a collection of constraints
+using ConstraintsPoint = std::map<IndexT, ConstraintPoint>;
+
 /// Define a collection of rotation priors
 using RotationPriors = std::vector<RotationPrior>;
 
@@ -66,6 +70,8 @@ class SfMData
     LandmarksUncertainty _landmarksUncertainty;
     /// 2D Constraints
     Constraints2D constraints2d;
+    /// Point constraintss
+    ConstraintsPoint constraintspoint;
     /// Rotation priors
     RotationPriors rotationpriors;
 
@@ -133,6 +139,13 @@ class SfMData
      */
     const Constraints2D& getConstraints2D() const { return constraints2d; }
     Constraints2D& getConstraints2D() { return constraints2d; }
+
+    /**
+     * @brief Get ConstraintsPoints
+     * @return ConstraintsPoints
+     */
+    const ConstraintsPoint& getConstraintsPoint() const { return constraintspoint; }
+    ConstraintsPoint& getConstraintsPoint() { return constraintspoint; }
 
     /**
      * @brief Get RotationPriors
@@ -246,6 +259,20 @@ class SfMData
             return _intrinsics.at(intrinsicId);
         return nullptr;
     }
+
+    /**
+     * @brief Gives the intrinsic of the input intrinsic id.
+     * @param[in] intrinsicId The given intrinsic ID
+     * @return the corresponding intrinsic reference
+     */
+    const camera::IntrinsicBase& getIntrinsic(IndexT intrinsicId) const { return *(_intrinsics.at(intrinsicId)); }
+
+    /**
+     * @brief Gives the intrinsic of the input intrinsic id.
+     * @param[in] intrinsicId The given intrinsic ID
+     * @return the corresponding intrinsic reference
+     */
+    camera::IntrinsicBase& getIntrinsic(IndexT intrinsicId) { return *(_intrinsics.at(intrinsicId)); }
 
     /**
      * @brief Get a set of views keys
