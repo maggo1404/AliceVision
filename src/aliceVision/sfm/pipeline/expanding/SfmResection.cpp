@@ -91,11 +91,12 @@ bool SfmResection::processView(
     }
 
     //Refine the pose
-    if (!internalRefinement(structure, observations, inliers, pose, intrinsic))
+    if (!internalRefinement(structure, observations, inliers, pose, intrinsic, errorMax))
     {
         ALICEVISION_LOG_INFO("SfmResection::processView internalRefinemanet failed " << viewId);
         return false;
     }
+    
 
     updatedThreshold = errorMax;
     updatedPose = pose;
@@ -140,7 +141,8 @@ bool SfmResection::internalRefinement(
         const std::vector<Eigen::Vector2d> & observations,
         const std::vector<size_t> & inliers,
         Eigen::Matrix4d & pose, 
-        std::shared_ptr<camera::IntrinsicBase> & intrinsics)
+        std::shared_ptr<camera::IntrinsicBase> & intrinsics,
+        double & errorMax)
 {
     // Setup a tiny SfM scene with the corresponding 2D-3D data
     sfmData::SfMData tinyScene;
@@ -155,7 +157,7 @@ bool SfmResection::internalRefinement(
     // Intrinsics
     tinyScene.getIntrinsics().emplace(0, intrinsics);
 
-    const double unknownScale = 0.0;
+    const double unknownScale = 1.0;
 
     // structure data (2D-3D correspondences)
     for(std::size_t i = 0; i < inliers.size(); ++i)
@@ -178,6 +180,19 @@ bool SfmResection::internalRefinement(
     }
 
     pose = tinyScene.getPose(*view).getTransform().getHomogeneous();
+
+    // Compute errorMax
+    errorMax = 0.0;
+    for(std::size_t i = 0; i < inliers.size(); ++i)
+    {
+        const std::size_t idx = inliers[i];
+
+        Vec2 est = intrinsics->transformProject(pose, structure[idx].homogeneous(), true);
+        Vec2 diff = observations[idx] - est;
+
+        errorMax = std::max(errorMax, diff.norm());
+    }
+
 
     return true;
 }

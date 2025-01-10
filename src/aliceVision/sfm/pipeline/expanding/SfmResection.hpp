@@ -61,7 +61,8 @@ private:
             const std::vector<Eigen::Vector2d> & observations,
             const std::vector<size_t> & inliers,
             Eigen::Matrix4d & pose, 
-            std::shared_ptr<camera::IntrinsicBase> & intrinsics
+            std::shared_ptr<camera::IntrinsicBase> & intrinsics,
+            double & errorMax
         );
 
 private:
