@@ -142,6 +142,7 @@ int aliceVision_main(int argc, char** argv)
     int rangeSize = 1;
     const size_t minInliers = 35;
     bool enforcePureRotation = false;
+    size_t countIterations = 1024;
 
     // user optional parameters
     std::string describerTypesName = feature::EImageDescriberType_enumToString(feature::EImageDescriberType::SIFT);
@@ -158,6 +159,7 @@ int aliceVision_main(int argc, char** argv)
     po::options_description optionalParams("Optional parameters");
     optionalParams.add_options()
         ("enforcePureRotation,e", po::value<bool>(&enforcePureRotation)->default_value(enforcePureRotation), "Enforce pure rotation in estimation.")
+        ("countIterations", po::value<size_t>(&countIterations)->default_value(countIterations), "Maximal number of iterations.")
         ("rangeStart", po::value<int>(&rangeStart)->default_value(rangeStart), "Range image index start.")
         ("rangeSize", po::value<int>(&rangeSize)->default_value(rangeSize), "Range size.");
     // clang-format on
@@ -285,7 +287,7 @@ int aliceVision_main(int argc, char** argv)
                                                         refpts, 
                                                         nextpts, 
                                                         randomNumberGenerator, 
-                                                        1024, 
+                                                        countIterations, 
                                                         minInliers);
             if (!relativeSuccess)
             {
@@ -308,7 +310,7 @@ int aliceVision_main(int argc, char** argv)
                                                           refpts,
                                                           nextpts,
                                                           randomNumberGenerator,
-                                                          1024,
+                                                          countIterations,
                                                           minInliers);
             if (!essentialSuccess)
             {
