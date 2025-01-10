@@ -88,5 +88,41 @@ bool MeshIntersection::peekNormal(Vec3 & output, const camera::IntrinsicBase & i
     return true;
 }
 
+bool MeshIntersection::peekPointAndNormal(Vec3 & point, Vec3 & normal, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords)
+{
+    const Vec3 posCamera = _pose.center();
+    const Vec3 wdir = intrinsic.backprojectTransform(imageCoords, true, _pose, 1.0);
+    const Vec3 dir = (wdir - posCamera).normalized();
+    
+    //Create geogram ray from alicevision ray
+    GEO::Ray ray;
+    ray.origin.x = posCamera.x();
+    ray.origin.y = -posCamera.y();
+    ray.origin.z = -posCamera.z();
+    ray.direction.x = dir.x();
+    ray.direction.y = -dir.y();
+    ray.direction.z = -dir.z();
+
+    GEO::MeshFacetsAABB::Intersection intersection;
+    if (!_aabb.ray_nearest_intersection(ray, intersection)) 
+    {
+        return false;
+    }
+
+    const GEO::vec3 p = ray.origin + intersection.t * ray.direction;
+
+    point.x() = p.x;
+    point.y() = -p.y;
+    point.z() = -p.z;
+
+    const GEO::vec3 n = GEO::normalize(intersection.N);
+
+    normal.x() = n.x;
+    normal.y() = -n.y;
+    normal.z() = -n.z;
+
+    return true;
+}
+
 }
 }

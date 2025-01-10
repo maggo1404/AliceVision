@@ -48,6 +48,16 @@ public:
     */
     bool peekNormal(Vec3 & output, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords);
 
+    /**
+     * @brief peek a point and get its normal on the mesh given a input camera observation
+     * @param point the output measured point
+     * @param normal the output measured normal
+     * @param intrinsic the camera intrinsics to use for ray computation
+     * @param imageCoords the camera observation we want to use to estimate its 'depth'
+     * @return true if the ray intersect the mesh.
+    */
+    bool peekPointAndNormal(Vec3 & point, Vec3 & normal, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords);
+
 private:
     GEO::Mesh _mesh;
     GEO::MeshFacetsAABB _aabb;
