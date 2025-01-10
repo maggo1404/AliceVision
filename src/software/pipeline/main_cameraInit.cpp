@@ -216,7 +216,7 @@ int aliceVision_main(int argc, char** argv)
         ("defaultOffsetY", po::value<double>(&defaultOffsetY)->default_value(defaultOffsetY),
          "Default offset from the principal point Y coordinate.")
         ("defaultCameraModel", po::value<std::string>(&defaultCameraModelName)->default_value(defaultCameraModelName),
-         "Default camera model type (pinhole, equidistant).")
+         "Default camera model type (pinhole, equidistant, equirectangular).")
         ("defaultDistortionModel", po::value<std::string>(&defaultDistortionModelName)->default_value(defaultDistortionModelName),
          "Default Distortion model type (none, radialk1, radialk3, radialk3pt, radialbrown, fisheye, fisheye1).")
         ("groupCameraFallback", po::value<EGroupCameraFallback>(&groupCameraFallback)->default_value(groupCameraFallback),

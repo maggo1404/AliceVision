@@ -88,6 +88,11 @@ void LbaPolicyConnexity::setupIntrinsics(sfmData::SfMData & sfmData)
     for (auto & pi : sfmData.getIntrinsics())
     {
         const auto & vec = _historyHandler->getFocalHistory(pi.first);
+        if (vec.size() == 0)
+        {
+            pi.second->setState(EEstimatorParameterState::REFINED);
+            continue;
+        }
 
         size_t lastGood = std::numeric_limits<size_t>::max();
         std::vector<std::pair<size_t, double>> filtered;
