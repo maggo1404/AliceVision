@@ -140,7 +140,7 @@ int aliceVision_main(int argc, char** argv)
     std::string outputDirectory;
     int rangeStart = -1;
     int rangeSize = 1;
-    const size_t minInliers = 35;
+    size_t minInliers = 35;
     bool enforcePureRotation = false;
     size_t countIterations = 1024;
 
@@ -160,6 +160,7 @@ int aliceVision_main(int argc, char** argv)
     optionalParams.add_options()
         ("enforcePureRotation,e", po::value<bool>(&enforcePureRotation)->default_value(enforcePureRotation), "Enforce pure rotation in estimation.")
         ("countIterations", po::value<size_t>(&countIterations)->default_value(countIterations), "Maximal number of iterations.")
+        ("minInliers", po::value<size_t>(&minInliers)->default_value(minInliers), "Minimal number of inliers for a valid ransac.")
         ("rangeStart", po::value<int>(&rangeStart)->default_value(rangeStart), "Range image index start.")
         ("rangeSize", po::value<int>(&rangeSize)->default_value(rangeSize), "Range size.");
     // clang-format on
@@ -325,6 +326,11 @@ int aliceVision_main(int argc, char** argv)
             if (!estimateTransformStructureFromEssential(T, structure, vecInliers, E, inliers, 
                                                       *refIntrinsics, *nextIntrinsics, 
                                                       refpts, nextpts))
+            {
+                continue;
+            }
+
+            if (vecInliers.size() < minInliers)
             {
                 continue;
             }
