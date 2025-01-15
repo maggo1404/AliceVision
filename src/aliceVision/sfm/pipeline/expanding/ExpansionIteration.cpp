@@ -47,6 +47,10 @@ bool ExpansionIteration::process(sfmData::SfMData & sfmData, track::TracksHandle
             continue;
         }
 
+        //Rollback any views which were ignored (not with errors)
+        _policy->rollback(_chunkHandler->getIgnoredViews());
+        
+        //Save this epoch to history
         _historyHandler->endEpoch(sfmData, _policy->getNextViews());
     }
 

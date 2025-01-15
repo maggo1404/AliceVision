@@ -73,6 +73,12 @@ public:
         _maxViewsPerGroup = count;
     }
 
+    /**
+     * @brief rollback some processed views inside the available views
+     * @param viewsSet the set of views that we want to be able to select again.
+    */
+    virtual void rollback(const std::set<IndexT> & viewsSet);
+
 private:
 
     // vector of  selected views for this iteration

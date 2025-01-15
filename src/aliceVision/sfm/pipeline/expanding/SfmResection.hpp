@@ -32,6 +32,7 @@ public:
      * @param viewId the view id to process
      * @param updatedPose output estimated pose
      * @param updatedThreshold estimated threshold
+     * @param inliersCount number of inliers for this resection
      * @return false if a critical error occured
     */
     bool processView(
@@ -41,7 +42,8 @@ public:
                 std::mt19937 &randomNumberGenerator,
                 const IndexT viewId,
                 Eigen::Matrix4d & updatedPose,
-                double & updatedThreshold
+                double & updatedThreshold,
+                size_t & inliersCount
             );
 
 private:

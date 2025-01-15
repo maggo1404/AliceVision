@@ -98,6 +98,11 @@ public:
         _minTriangulationAngleDegrees = angle;
     }
 
+    const std::set<IndexT> & getIgnoredViews()
+    {
+        return _ignoredViews;
+    }
+
 private:
 
     /**
@@ -128,6 +133,7 @@ private:
     SfmBundle::uptr _bundleHandler;
     ExpansionHistory::sptr _historyHandler;
     PointFetcher::uptr _pointFetcherHandler;
+    std::set<IndexT> _ignoredViews;
 
 private:    
     size_t _resectionIterations = 1024;

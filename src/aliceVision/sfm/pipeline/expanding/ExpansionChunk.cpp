@@ -15,6 +15,7 @@ namespace sfm {
 
 bool ExpansionChunk::process(sfmData::SfMData & sfmData, const track::TracksHandler & tracksHandler, const std::set<IndexT> & viewsChunk)
 {   
+    _ignoredViews.clear();
     ALICEVISION_LOG_INFO("ExpansionChunk::process start");
     ALICEVISION_LOG_INFO("Chunk size : " << viewsChunk.size());
 
@@ -31,6 +32,17 @@ bool ExpansionChunk::process(sfmData::SfMData & sfmData, const track::TracksHand
         return false;
     }
 
+
+    struct IntermediateResectionInfo
+    {
+        IndexT viewId;
+        Eigen::Matrix4d pose;
+        size_t inliersCount;
+        double threshold;
+    };
+
+    std::vector<IntermediateResectionInfo> intermediateInfos;
+
     ALICEVISION_LOG_INFO("Resection start");
     #pragma omp parallel for
     for (int i = 0; i < viewsChunk.size(); i++)
@@ -41,25 +53,52 @@ bool ExpansionChunk::process(sfmData::SfMData & sfmData, const track::TracksHand
 
         if (!sfmData.isPoseAndIntrinsicDefined(viewId))
         {
+            IntermediateResectionInfo iri;
+            iri.viewId = viewId;
+
             SfmResection resection(_resectionIterations, _resectionMaxError);
 
-            Eigen::Matrix4d pose;
-            double threshold = 0.0;
             std::mt19937 randomNumberGenerator;
             if (!resection.processView(sfmData, 
                                 tracksHandler.getAllTracks(), tracksHandler.getTracksPerView(), 
                                 randomNumberGenerator, viewId, 
-                                pose, threshold))
+                                iri.pose, iri.threshold, iri.inliersCount))
             {
                 continue;
             }
 
             #pragma omp critical
             {
-                
-                addPose(sfmData, viewId, pose);
+                intermediateInfos.push_back(iri);
             }
         }
+    }
+
+    //Check that at least one view has rich info
+    const int poorInliersCount = 100;
+    int richViews = 0;
+    for (const auto & item : intermediateInfos)
+    {
+        if (item.inliersCount > poorInliersCount)
+        {
+            richViews++;
+        }
+    }
+
+
+    //Add pose only if it match conditions
+    for (const auto & item : intermediateInfos)
+    {
+        if (richViews > 0)
+        {
+            if (item.inliersCount < poorInliersCount)
+            {
+                _ignoredViews.insert(item.viewId);
+                continue;
+            }
+        }
+        
+        addPose(sfmData, item.viewId, item.pose);
     }
 
     // Get a list of valid views

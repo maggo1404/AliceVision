@@ -33,6 +33,12 @@ public:
      * @return true if the policy succeeded
     */
     virtual bool process(const sfmData::SfMData & sfmData, const track::TracksHandler & tracksHandler) = 0;
+
+    /**
+     * @brief rollback some processed views inside the available views
+     * @param viewsSet the set of views that we want to be able to select again.
+    */
+    virtual void rollback(const std::set<IndexT> & viewsSet) = 0;
     
     /**
      * @brief Retrieve the selected next views

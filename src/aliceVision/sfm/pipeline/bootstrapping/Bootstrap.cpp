@@ -104,10 +104,11 @@ bool bootstrapMesh(sfmData::SfMData & sfmData,
     std::mt19937 randomNumberGenerator;
     Eigen::Matrix4d pose;
     double threshold;
+    size_t countInliers;
 
     //Compute resection for selected view
     SfmResection resection(50000, std::numeric_limits<double>::infinity());
-    if (!resection.processView(sfmData, tracksMap, tracksPerView, randomNumberGenerator, viewId, pose, threshold))
+    if (!resection.processView(sfmData, tracksMap, tracksPerView, randomNumberGenerator, viewId, pose, threshold, countInliers))
     {
         return false;
     }

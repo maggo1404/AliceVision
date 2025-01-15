@@ -26,7 +26,8 @@ bool SfmResection::processView(
                         std::mt19937 &randomNumberGenerator,
                         const IndexT viewId,
                         Eigen::Matrix4d & updatedPose,
-                        double & updatedThreshold
+                        double & updatedThreshold,
+                        size_t & inliersCount
                         )
 {
     ALICEVISION_LOG_INFO("SfmResection::processView start " << viewId);
@@ -89,6 +90,9 @@ bool SfmResection::processView(
         ALICEVISION_LOG_INFO("SfmResection::processView internalResection failed " << viewId);
         return false;
     }
+
+    inliersCount = inliers.size();
+    ALICEVISION_LOG_INFO("Resection for view " << viewId << " had " << inliersCount << " inliers.");
 
     //Refine the pose
     if (!internalRefinement(structure, observations, inliers, pose, intrinsic, errorMax))
