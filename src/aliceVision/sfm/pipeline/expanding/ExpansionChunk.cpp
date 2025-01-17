@@ -250,7 +250,7 @@ void ExpansionChunk::setConstraints(sfmData::SfMData & sfmData, const track::Tra
 
     for (const auto & [trackId, vecInfo] : infoPerLandmark)
     {
-        if (vecInfo.size() == 0)
+        if (vecInfo.empty())
         {
             continue;
         }

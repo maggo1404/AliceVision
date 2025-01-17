@@ -148,7 +148,7 @@ int aliceVision_main(int argc, char** argv)
             indexFilterA = sfmData.findView(filterA);
             if (indexFilterA == UndefinedIndexT)
             {
-                ALICEVISION_LOG_ERROR("Could not find corresponding view for : " + filterA);
+                ALICEVISION_LOG_ERROR("Could not find corresponding view for: " + filterA);
                 return EXIT_FAILURE;
             }
         }
@@ -158,7 +158,7 @@ int aliceVision_main(int argc, char** argv)
             indexFilterB = sfmData.findView(filterB);
             if (indexFilterB == UndefinedIndexT)
             {
-                ALICEVISION_LOG_ERROR("Could not find corresponding view for : " + filterB);
+                ALICEVISION_LOG_ERROR("Could not find corresponding view for: " + filterB);
                 return EXIT_FAILURE;
             }
         }

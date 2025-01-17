@@ -22,7 +22,7 @@ public:
 public:
     /**
      * Set the pose of the camera
-     * @param the pose of the camera wrt some global coordinates frame
+     * @param pose the pose of the camera wrt some global coordinates frame
     */
     virtual void setPose(const geometry::Pose3 & pose) = 0;
 
@@ -30,7 +30,6 @@ public:
      * @brief virtual method to get coordinates and normals of a pixel of an image
      * @param point result point in some global coordinates frame
      * @param normal result normal in some global coordinates frame
-     * @param pose pose of the camera wrt some global coordinates frame
      * @param intrinsic the camera intrinsic object
      * @param imageCoords the input image pixel coordinates in 2D.
      * @return false on error 

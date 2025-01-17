@@ -204,7 +204,7 @@ void ExpansionPolicyLegacy::rollback(const std::set<IndexT> & viewsSet)
 {
     for (const auto & item : viewsSet)
     {
-        ALICEVISION_LOG_INFO("rollback view : " << item);
+        ALICEVISION_LOG_INFO("Rollback view : " << item);
         _availableViewsIds.insert(item);
     }
 }

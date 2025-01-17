@@ -35,7 +35,7 @@ public:
      * @param output the output measured point
      * @param intrinsic the camera intrinsics to use for ray computation
      * @param imageCoords the camera observation we want to use to estimate its 'depth'
-     * @return true if the ray intersect the mesh.
+     * @return true if the ray intersects the mesh.
     */
     bool pickPoint(Vec3 & output, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords);
 
@@ -44,7 +44,7 @@ public:
      * @param output the output measured normal
      * @param intrinsic the camera intrinsics to use for ray computation
      * @param imageCoords the camera observation we want to use to estimate its 'depth'
-     * @return true if the ray intersect the mesh.
+     * @return true if the ray intersects the mesh.
     */
     bool pickNormal(Vec3 & output, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords);
 
@@ -54,7 +54,7 @@ public:
      * @param normal the output measured normal
      * @param intrinsic the camera intrinsics to use for ray computation
      * @param imageCoords the camera observation we want to use to estimate its 'depth'
-     * @return true if the ray intersect the mesh.
+     * @return true if the ray intersects the mesh.
     */
     bool pickPointAndNormal(Vec3 & point, Vec3 & normal, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords);
 

@@ -70,8 +70,8 @@ class SfMData
     LandmarksUncertainty _landmarksUncertainty;
     /// 2D Constraints
     Constraints2D constraints2d;
-    /// Point constraintss
-    ConstraintsPoint constraintspoint;
+    /// Point constraints
+    ConstraintsPoint constraintsPoint;
     /// Rotation priors
     RotationPriors rotationpriors;
 
@@ -144,8 +144,8 @@ class SfMData
      * @brief Get ConstraintsPoints
      * @return ConstraintsPoints
      */
-    const ConstraintsPoint& getConstraintsPoint() const { return constraintspoint; }
-    ConstraintsPoint& getConstraintsPoint() { return constraintspoint; }
+    const ConstraintsPoint& getConstraintsPoint() const { return constraintsPoint; }
+    ConstraintsPoint& getConstraintsPoint() { return constraintsPoint; }
 
     /**
      * @brief Get RotationPriors

@@ -20,7 +20,7 @@ class ExpansionChunk
 {
 public:
     using uptr = std::unique_ptr<ExpansionChunk>;
-    
+
 public:
 
     /**
@@ -35,7 +35,7 @@ public:
                 const std::set<IndexT> & viewsChunk);
 
     /**
-     * brief setup the bundle handler
+     * @brief setup the bundle handler
      * @param bundleHandler a unique ptr. the Ownership will be taken
     */
     void setBundleHandler(SfmBundle::uptr & bundleHandler)

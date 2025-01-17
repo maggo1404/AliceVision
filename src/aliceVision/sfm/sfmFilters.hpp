@@ -43,7 +43,7 @@ IndexT removeOutliersWithPixelResidualError(sfmData::SfMData& sfmData,
 IndexT removeOutliersWithAngleError(sfmData::SfMData& sfmData, const double dMinAcceptedAngle);
 
 /**
- * @Brief remove all point constraints which are too far away from their associated landmark
+ * @brief remove all point constraints which are too far away from their associated landmark
  * @param sfmData the sfmData  to update
  * @param maxDist the maximal allowed distance between the landmark and the constraint
  * @return the number of constraints removed
