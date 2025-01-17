@@ -234,7 +234,7 @@ void ExpansionChunk::setConstraints(sfmData::SfMData & sfmData, const track::Tra
             }
 
             Vec3 point, normal;
-            if (!_pointFetcherHandler->peekPointAndNormal(point, normal, intrinsics, trackItem.coords))
+            if (!_pointFetcherHandler->pickPointAndNormal(point, normal, intrinsics, trackItem.coords))
             {
                 continue;
             }

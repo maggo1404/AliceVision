@@ -28,7 +28,7 @@ bool MeshIntersection::initialize(const std::string & pathToModel)
     return true;
 }
 
-bool MeshIntersection::peekPoint(Vec3 & output, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords)
+bool MeshIntersection::pickPoint(Vec3 & output, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords)
 {
     const Vec3 posCamera = _pose.center();
     const Vec3 wdir = intrinsic.backprojectTransform(imageCoords, true, _pose, 1.0);
@@ -58,7 +58,7 @@ bool MeshIntersection::peekPoint(Vec3 & output, const camera::IntrinsicBase & in
     return true;
 }
 
-bool MeshIntersection::peekNormal(Vec3 & output, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords)
+bool MeshIntersection::pickNormal(Vec3 & output, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords)
 {
     const Vec3 posCamera = _pose.center();
     const Vec3 wdir = intrinsic.backprojectTransform(imageCoords, true, _pose, 1.0);
@@ -88,7 +88,7 @@ bool MeshIntersection::peekNormal(Vec3 & output, const camera::IntrinsicBase & i
     return true;
 }
 
-bool MeshIntersection::peekPointAndNormal(Vec3 & point, Vec3 & normal, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords)
+bool MeshIntersection::pickPointAndNormal(Vec3 & point, Vec3 & normal, const camera::IntrinsicBase & intrinsic, const Vec2 & imageCoords)
 {
     const Vec3 posCamera = _pose.center();
     const Vec3 wdir = intrinsic.backprojectTransform(imageCoords, true, _pose, 1.0);

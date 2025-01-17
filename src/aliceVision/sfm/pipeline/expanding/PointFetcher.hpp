@@ -35,7 +35,7 @@ public:
      * @param imageCoords the input image pixel coordinates in 2D.
      * @return false on error 
     */
-    virtual bool peekPointAndNormal(Vec3 & point, 
+    virtual bool pickPointAndNormal(Vec3 & point, 
                                 Vec3 & normal, 
                                 const camera::IntrinsicBase & intrinsic, 
                                 const Vec2 & imageCoords) = 0;

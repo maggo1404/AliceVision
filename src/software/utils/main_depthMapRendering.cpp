@@ -117,7 +117,7 @@ int aliceVision_main(int argc, char** argv)
                 //Find the 3d point 
                 //Which is the intersection of the ray and the mesh
                 Vec3 pt3d;
-                if (!mi.peekPoint(pt3d, *intrinsic, pt))
+                if (!mi.pickPoint(pt3d, *intrinsic, pt))
                 {
                     continue;
                 }

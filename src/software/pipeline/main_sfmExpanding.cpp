@@ -65,12 +65,12 @@ public:
      * @param imageCoords the input image pixel coordinates in 2D.
      * @return false on error 
     */
-    bool peekPointAndNormal(Vec3 & point, 
+    bool pickPointAndNormal(Vec3 & point, 
                                 Vec3 & normal, 
                                 const camera::IntrinsicBase & intrinsic, 
                                 const Vec2 & imageCoords) override
     {
-        return _mi.peekPointAndNormal(point, normal, intrinsic, imageCoords);
+        return _mi.pickPointAndNormal(point, normal, intrinsic, imageCoords);
     }
 
 private:

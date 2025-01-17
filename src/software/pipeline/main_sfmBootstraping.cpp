@@ -87,7 +87,7 @@ bool landmarksFromMesh(
         const double scale = track.featPerView.at(referenceViewId).scale;
 
         Vec3 point;
-        if (!mi.peekPoint(point, intrinsic, refpt))
+        if (!mi.pickPoint(point, intrinsic, refpt))
         {
             continue;
         }
