@@ -109,7 +109,7 @@ int aliceVision_main(int argc, char** argv)
                 //Which is the intersection of the ray and the mesh
                 //And get its normal
                 Vec3 normal;
-                if (!mi.peekNormal(normal, *intrinsic, pt))
+                if (!mi.pickNormal(normal, *intrinsic, pt))
                 {
                     continue;
                 }

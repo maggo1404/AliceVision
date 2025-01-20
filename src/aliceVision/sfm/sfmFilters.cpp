@@ -280,5 +280,46 @@ bool eraseUnstablePosesAndObservations(sfmData::SfMData& sfmData,
     return removedPoses || removedObservations;
 }
 
+IndexT removeConstraints(sfmData::SfMData& sfmData, double maxDist)
+{
+    const auto & landmarks = sfmData.getLandmarks();
+    auto & constraints = sfmData.getConstraintsPoint();
+
+    // Remove all constraints which are very far from associated landmark
+
+    size_t count = 0;
+    auto itConstraints = constraints.begin();
+    while (itConstraints != constraints.end())
+    {
+        IndexT trackId = itConstraints->first;
+
+        auto landmarkIt = landmarks.find(trackId);
+
+        //If the associated landmark does not exists anymore, remove the constraint
+        if (landmarkIt == landmarks.end())
+        {
+            itConstraints = constraints.erase(itConstraints);
+            count++;
+            continue;
+        }
+    
+        const Vec3 & lpt = landmarkIt->second.X;
+        double dist = (itConstraints->second.point - lpt).norm();
+
+        //Remove if the landmark is too far away
+        if (dist > maxDist)
+        {
+            itConstraints = constraints.erase(itConstraints);
+            count++;
+        }
+        else 
+        {
+            ++itConstraints;
+        }
+    }
+
+    return count;
+}
+
 }  // namespace sfm
 }  // namespace aliceVision

@@ -11,6 +11,7 @@
 #include <aliceVision/sfmData/SfMData.hpp>
 #include <aliceVision/sfm/pipeline/expanding/ExpansionHistory.hpp>
 #include <aliceVision/sfm/pipeline/expanding/SfmBundle.hpp>
+#include <aliceVision/sfm/pipeline/expanding/PointFetcher.hpp>
 
 namespace aliceVision {
 namespace sfm {
@@ -34,7 +35,7 @@ public:
                 const std::set<IndexT> & viewsChunk);
 
     /**
-     * brief setup the bundle handler
+     * @brief setup the bundle handler
      * @param bundleHandler a unique ptr. the Ownership will be taken
     */
     void setBundleHandler(SfmBundle::uptr & bundleHandler)
@@ -49,6 +50,15 @@ public:
     void setExpansionHistoryHandler(ExpansionHistory::sptr & expansionHistory)
     {
         _historyHandler = expansionHistory;
+    }
+
+    /**
+     * brief setup the point fetcher handler
+     * @param pointFetcher a unique ptr. the Ownership will be taken
+    */
+    void setPointFetcherHandler(PointFetcher::uptr & pointFetcherHandler)
+    {
+        _pointFetcherHandler = std::move(pointFetcherHandler);
     }
 
     void setResectionMaxIterations(size_t maxIterations)
@@ -88,6 +98,11 @@ public:
         _minTriangulationAngleDegrees = angle;
     }
 
+    const std::set<IndexT> & getIgnoredViews()
+    {
+        return _ignoredViews;
+    }
+
 private:
 
     /**
@@ -106,9 +121,19 @@ private:
      */
     bool triangulate(sfmData::SfMData & sfmData, const track::TracksHandler & tracksHandler, const std::set<IndexT> & viewIds);
 
+    /**
+     * @brief Add constraints on points
+     * @param sfmData the object to update
+     * @param tracks all tracks of the scene as a map {trackId, track}
+     * @param viewIds the set of views to process 
+    */
+    void setConstraints(sfmData::SfMData & sfmData, const track::TracksHandler & tracksHandler, const std::set<IndexT> & viewIds);
+
 private:
     SfmBundle::uptr _bundleHandler;
     ExpansionHistory::sptr _historyHandler;
+    PointFetcher::uptr _pointFetcherHandler;
+    std::set<IndexT> _ignoredViews;
 
 private:    
     size_t _resectionIterations = 1024;

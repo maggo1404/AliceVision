@@ -54,16 +54,20 @@ bool SfmBundle::cleanup(sfmData::SfMData & sfmData)
     // Remove landmarks without enough observed parallax
     const std::size_t nbOutliersAngleErr = removeOutliersWithAngleError(sfmData, _minAngleForLandmark);
 
+    // Remove constraints which are too far away from landmark
+    const std::size_t nbOutliersConstraints =  removeConstraints(sfmData, _maxConstraintDistance);
+
     // Remove poses without enough observations in an interative fashion
     const std::size_t nbOutliers = nbOutliersResidualErr + nbOutliersAngleErr;
     std::set<IndexT> removedViewsIdIteration;
     bool somethingErased = eraseUnstablePosesAndObservations(sfmData, _minPointsPerPose, _minTrackLength, &removedViewsIdIteration);
 
-    bool somethingChanged = /*somethingErased || */(nbOutliers > _bundleAdjustmentMaxOutlier);
+    bool somethingChanged = /*somethingErased || */(nbOutliers > _bundleAdjustmentMaxOutlier) || (nbOutliersConstraints > 0);
 
     ALICEVISION_LOG_INFO("SfmBundle::cleanup : ");
     ALICEVISION_LOG_INFO(" - nbOutliersResidualErr : " << nbOutliersResidualErr);
     ALICEVISION_LOG_INFO(" - nbOutliersAngleErr : " << nbOutliersAngleErr);
+    ALICEVISION_LOG_INFO(" - nbOutliersConstraints : " << nbOutliersConstraints);
     ALICEVISION_LOG_INFO(" - somethingErased : " << somethingErased);
     ALICEVISION_LOG_INFO(" - somethingChanged : " << somethingChanged);
 

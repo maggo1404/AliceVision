@@ -129,6 +129,7 @@ if(ALICEVISION_BUILD_SFM)
               aliceVision_sfmData
               aliceVision_track
               aliceVision_dataio
+              aliceVision_mesh
               Boost::program_options
               Boost::json
     )
@@ -144,6 +145,7 @@ if(ALICEVISION_BUILD_SFM)
               aliceVision_sfmData
               aliceVision_track
               aliceVision_dataio
+              aliceVision_mesh
               Boost::program_options
               Boost::json
     )

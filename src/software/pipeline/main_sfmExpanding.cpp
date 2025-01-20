@@ -20,16 +20,61 @@
 #include <aliceVision/sfm/pipeline/expanding/LbaPolicyConnexity.hpp>
 #include <aliceVision/sfm/pipeline/expanding/ExpansionPostProcessRig.hpp>
 
+#include <aliceVision/mesh/MeshIntersection.hpp>
+
 #include <boost/program_options.hpp>
 
 // These constants define the current software version.
 // They must be updated when the command line is changed.
-#define ALICEVISION_SOFTWARE_VERSION_MAJOR 1
+#define ALICEVISION_SOFTWARE_VERSION_MAJOR 2
 #define ALICEVISION_SOFTWARE_VERSION_MINOR 0
 
 using namespace aliceVision;
 
 namespace po = boost::program_options;
+
+//This intermediate class is used as a proxy to not link 
+//sfm with mesh library
+class MeshPointFetcher : public sfm::PointFetcher
+{
+public:
+    /**
+     * @brief initialize object. to be called before any other method
+     * @param pathToModel path to obj file to use as mesh
+    */
+    bool initialize(const std::string & pathToModel)
+    {
+        return _mi.initialize(pathToModel);
+    }
+
+    /**
+     * @brief Set the pose of the camera
+     * @param pose the pose of the camera wrt some global coordinates frame
+    */
+    void setPose(const geometry::Pose3 & pose) override
+    {
+        _mi.setPose(pose);
+    }
+
+    /**
+     * @brief virtual method to get coordinates and normals of a pixel of an image
+     * @param point result point in some global coordinates frame
+     * @param normal result normal in some global coordinates frame
+     * @param intrinsic the camera intrinsic object
+     * @param imageCoords the input image pixel coordinates in 2D.
+     * @return false on error 
+    */
+    bool pickPointAndNormal(Vec3 & point, 
+                                Vec3 & normal, 
+                                const camera::IntrinsicBase & intrinsic, 
+                                const Vec2 & imageCoords) override
+    {
+        return _mi.pickPointAndNormal(point, normal, intrinsic, imageCoords);
+    }
+
+private:
+    mesh::MeshIntersection _mi;
+};
 
 int aliceVision_main(int argc, char** argv)
 {
@@ -37,6 +82,7 @@ int aliceVision_main(int argc, char** argv)
     std::string sfmDataFilename;
     std::string sfmDataOutputFilename;
     std::string tracksFilename;
+    std::string meshFilename;
 
     std::size_t localizerEstimatorMaxIterations = 50000;
     double localizerEstimatorError = 0.0;
@@ -93,6 +139,7 @@ int aliceVision_main(int argc, char** argv)
          "If minNbCamerasToRefinePrincipalPoint==1, the principal point is always refined.")
     ("useRigConstraint", po::value<bool>(&useRigConstraint)->default_value(useRigConstraint), "Enable/Disable rig constraint.")
     ("rigMinNbCamerasForCalibration", po::value<int>(&minNbCamerasForRigCalibration)->default_value(minNbCamerasForRigCalibration),"Minimal number of cameras to start the calibration of the rig.")
+    ("meshFilename,t", po::value<std::string>(&meshFilename)->default_value(meshFilename), "Mesh file.");
     ;
      // clang-format on
    
@@ -173,6 +220,20 @@ int aliceVision_main(int argc, char** argv)
     sfmBundle->setMaxReprojectionError(maxReprojectionError);
     sfmBundle->setMinNbCamerasToRefinePrincipalPoint(minNbCamerasToRefinePrincipalPoint);
 
+    sfm::PointFetcher::uptr pointFetcherHandler;
+    if (!meshFilename.empty())
+    {
+        ALICEVISION_LOG_INFO("Load mesh");
+        std::unique_ptr<MeshPointFetcher> handler = std::make_unique<MeshPointFetcher>();
+        
+        if (!handler->initialize(meshFilename))
+        {
+            return EXIT_FAILURE;
+        }
+
+        pointFetcherHandler = std::move(handler);
+    }
+
     sfm::ExpansionChunk::uptr expansionChunk = std::make_unique<sfm::ExpansionChunk>();
     expansionChunk->setBundleHandler(sfmBundle);
     expansionChunk->setExpansionHistoryHandler(expansionHistory);
@@ -180,6 +241,7 @@ int aliceVision_main(int argc, char** argv)
     expansionChunk->setResectionMaxError(localizerEstimatorError);
     expansionChunk->setTriangulationMinPoints(minNbObservationsForTriangulation);
     expansionChunk->setMinAngleTriangulation(minAngleForTriangulation);
+    expansionChunk->setPointFetcherHandler(pointFetcherHandler);
     
     sfm::ExpansionPolicy::uptr expansionPolicy;
     {

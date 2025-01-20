@@ -200,5 +200,14 @@ double ExpansionPolicyLegacy::computeScore(const track::TracksMap & tracksMap,
     return sum;
 }
 
+void ExpansionPolicyLegacy::rollback(const std::set<IndexT> & viewsSet)
+{
+    for (const auto & item : viewsSet)
+    {
+        ALICEVISION_LOG_INFO("Rollback view : " << item);
+        _availableViewsIds.insert(item);
+    }
+}
+
 }
 }

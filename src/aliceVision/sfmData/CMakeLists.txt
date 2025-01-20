@@ -11,6 +11,8 @@ set(sfmData_files_headers
   ImageInfo.hpp
   ExposureSetting.hpp
   Observation.hpp
+  ConstraintPoint.hpp
+  Constraint2D.hpp
 )
 
 # Sources

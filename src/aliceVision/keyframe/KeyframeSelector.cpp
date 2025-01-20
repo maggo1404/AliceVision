@@ -1252,6 +1252,8 @@ bool KeyframeSelector::writeSfMData(const std::string& mediaPath,
 
 bool KeyframeSelector::writeSfMDataFromSfMData(const std::string& mediaPath)
 {
+    auto& keyframesPoses = _outputSfmKeyframes.getPoses();
+
     auto& keyframesViews = _outputSfmKeyframes.getViews();
     auto& framesViews = _outputSfmFrames.getViews();
 
@@ -1292,6 +1294,18 @@ bool KeyframeSelector::writeSfMDataFromSfMData(const std::string& mediaPath)
     {
         viewId = views[i]->getViewId();
         intrinsicId = views[i]->getIntrinsicId();
+        IndexT poseId = views[i]->getPoseId();
+
+        bool hasPose = inputSfm.isPoseAndIntrinsicDefined(viewId);
+        if (hasPose)
+        {
+            ALICEVISION_LOG_INFO("A fully calibrated view (Id:" << viewId << ") is moved to keyframes");
+            _selectedFrames[i] = '1';
+
+            //Make sure to keep the pose
+            keyframesPoses.emplace(poseId, inputSfm.getPoses().at(poseId));
+        }
+
         if (_selectedFrames[i] == '1')
         {
             keyframesViews.emplace(viewId, views[i]);
