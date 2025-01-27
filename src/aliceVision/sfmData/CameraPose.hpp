@@ -79,11 +79,27 @@ class CameraPose
 
     void setState(EEstimatorParameterState state) { _state = state; }
 
+    bool isRotationOnly() const
+    {
+        return _rotationOnly;
+    }   
+
+    /**
+     * Set the flag for partial state
+     * Partial flag set to on means the camera translation is not known
+    */
+    void setRotationOnly(bool partial)
+    {
+        _rotationOnly = partial;
+    }
+
   private:
     /// camera 3d transformation
     geometry::Pose3 _transform;
     /// camera lock
     bool _locked = false;
+    /// Only rotation is solved
+    bool _rotationOnly = false;
     /// Estimator state
     EEstimatorParameterState _state = EEstimatorParameterState::REFINED;
 };

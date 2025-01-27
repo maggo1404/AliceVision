@@ -14,6 +14,7 @@
 #include <aliceVision/system/Logger.hpp>
 #include <aliceVision/cmdline/cmdline.hpp>
 #include <aliceVision/system/main.hpp>
+#include <aliceVision/utils/filesIO.hpp>
 
 #include <dependencies/vectorGraphics/svgDrawer.hpp>
 #include <aliceVision/panorama/sphericalMapping.hpp>
@@ -464,7 +465,7 @@ int aliceVision_main(int argc, char** argv)
     std::vector<std::string> imagePaths;
     {
         const fs::path path = fs::absolute(inputPath);
-        if (fs::exists(path))
+        if (utils::exists(path))
         {
             // Input is either :
             // - an image folder
@@ -575,6 +576,7 @@ int aliceVision_main(int argc, char** argv)
         unsigned int width, height;
         double focal_px;
         camera::EINTRINSIC cameraModel;
+        camera::EDISTORTION distortionModel;
         if (splitMode == "equirectangular")
         {
             // In this case, dimensions and field of view are user provided
@@ -583,7 +585,8 @@ int aliceVision_main(int argc, char** argv)
             focal_px = (equirectangularSplitResolution / 2.0) / tan(degreeToRadian(fov) / 2.0);
 
             // By default, use a 3-parameter radial distortion model
-            cameraModel = camera::EINTRINSIC::PINHOLE_CAMERA_RADIAL3;
+            cameraModel = camera::EINTRINSIC::PINHOLE_CAMERA;
+            distortionModel = camera::EDISTORTION::DISTORTION_RADIALK3;
         }
         else if (splitMode == "dualfisheye")
         {
@@ -600,10 +603,19 @@ int aliceVision_main(int argc, char** argv)
             }
 
             // Use either a pinhole fisheye model or an equidistant model depending on user choice
-            cameraModel = camera::EINTRINSIC_stringToEnum(dualFisheyeCameraModel);
+            if (dualFisheyeCameraModel == "fisheye4")
+            {
+                cameraModel = camera::EINTRINSIC::PINHOLE_CAMERA;
+                distortionModel = camera::EDISTORTION::DISTORTION_FISHEYE;
+            }
+            else 
+            {
+                cameraModel = camera::EINTRINSIC::EQUIDISTANT_CAMERA;
+                distortionModel = camera::EDISTORTION::DISTORTION_RADIALK3PT;
+            }
         }
 
-        auto intrinsic = camera::createIntrinsic(cameraModel, width, height, focal_px, focal_px);
+        auto intrinsic = camera::createIntrinsic(cameraModel, distortionModel, camera::EUNDISTORTION::UNDISTORTION_NONE, width, height, focal_px, focal_px);
 
         // Default sensor dimensions
         intrinsic->setSensorWidth(36.0);

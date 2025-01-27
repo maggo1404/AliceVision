@@ -111,6 +111,7 @@ void AlembicExporter::DataImpl::addCamera(const std::string& name,
     if (pose != nullptr)
     {
         OBoolProperty(userProps, "mvg_poseLocked").set(pose->isLocked());
+        OBoolProperty(userProps, "mvg_rotationOnly").set(pose->isRotationOnly());
 
         // Convert from computer vision convention to computer graphics (opengl-like)
         Eigen::Matrix4d M = Eigen::Matrix4d::Identity();
@@ -183,15 +184,19 @@ void AlembicExporter::DataImpl::addCamera(const std::string& name,
     {
         CameraSample camSample;
 
+        const Vec2 & scale = intrinsicCasted->getScale();
+        const Vec2 & offset = intrinsicCasted->getOffset();
+        
         // Take the max of the image size to handle the case where the image is in portrait mode
         const float imgWidth = intrinsicCasted->w();
         const float imgHeight = intrinsicCasted->h();
         const float sensorWidth = intrinsicCasted->sensorWidth();
         const float sensorHeight = intrinsicCasted->sensorHeight();
         const float sensorWidth_pix = std::max(imgWidth, imgHeight);
-        const float focalLengthX_pix = static_cast<const float>(intrinsicCasted->getScale()(0));
-        const float focalLengthY_pix = static_cast<const float>(intrinsicCasted->getScale()(1));
+        const float focalLengthX_pix = static_cast<const float>(scale(0));
+        const float focalLengthY_pix = static_cast<const float>(scale(1));
         const float focalLength_mm = sensorWidth * focalLengthX_pix / sensorWidth_pix;
+        const float shiftX_mm = sensorWidth * focalLengthX_pix / sensorWidth_pix;
         const float squeeze = focalLengthX_pix / focalLengthY_pix;
         const float pix2mm = sensorWidth / sensorWidth_pix;
 
@@ -200,26 +205,32 @@ void AlembicExporter::DataImpl::addCamera(const std::string& name,
         // Following values are in cm, hence the 0.1 multiplier
         const float haperture_cm = static_cast<const float>(0.1 * imgWidth * pix2mm);
         const float vaperture_cm = static_cast<const float>(0.1 * imgHeight * pix2mm);
+        const float offsetX_cm = static_cast<const float>(0.1 * offset(0) * pix2mm);
+        const float offsetY_cm = static_cast<const float>(0.1 * (-offset(1)) * pix2mm);
 
         camSample.setFocalLength(focalLength_mm);
         camSample.setHorizontalAperture(haperture_cm);
         camSample.setVerticalAperture(vaperture_cm);
         camSample.setLensSqueezeRatio(squeeze);
+        camSample.setHorizontalFilmOffset(offsetX_cm);
+        camSample.setVerticalFilmOffset(offsetY_cm);
 
         // Add sensor width (largest image side) in pixels as custom property
         std::vector<::uint32_t> sensorSize_pix = {intrinsicCasted->w(), intrinsicCasted->h()};
         std::vector<double> sensorSize_mm = {sensorWidth, sensorHeight};
 
-        double initialFocalLength =
-          (intrinsicCasted->getInitialScale().x() > 0) ? (intrinsicCasted->getInitialScale().x() * sensorWidth / double(intrinsicCasted->w())) : -1;
+        double initialFocalLength = intrinsicCasted->getInitialFocalLength();
 
         OUInt32ArrayProperty(userProps, "mvg_sensorSizePix").set(sensorSize_pix);
         ODoubleArrayProperty(userProps, "mvg_sensorSizeMm").set(sensorSize_mm);
         OStringProperty(userProps, "mvg_intrinsicType").set(intrinsicCasted->getTypeStr());
         OStringProperty(userProps, "mvg_intrinsicInitializationMode").set(camera::EInitMode_enumToString(intrinsicCasted->getInitializationMode()));
         ODoubleProperty(userProps, "mvg_initialFocalLength").set(initialFocalLength);
+        OStringProperty(userProps, "mvg_intrinsicSerialNumber").set(intrinsicCasted->serialNumber());
         OBoolProperty(userProps, "mvg_intrinsicLocked").set(intrinsicCasted->isLocked());
         OBoolProperty(userProps, "mvg_intrinsicPixelRatioLocked").set(intrinsicCasted->isRatioLocked());
+        OBoolProperty(userProps, "mvg_intrinsicOffsetLocked").set(intrinsicCasted->isOffsetLocked());
+        OBoolProperty(userProps, "mvg_intrinsicScaleLocked").set(intrinsicCasted->isScaleLocked());
         OStringProperty(userProps, "mvg_intrinsicDistortionInitializationMode")
           .set(camera::EInitMode_enumToString(intrinsicCasted->getDistortionInitializationMode()));
 
@@ -230,20 +241,32 @@ void AlembicExporter::DataImpl::addCamera(const std::string& name,
             std::vector<double> params = {scale(0), scale(1), offset(0), offset(1)};
             ODoubleArrayProperty(userProps, "mvg_intrinsicParams").set(params);
         }
+
         // Distortion parameters
+        camera::EDISTORTION distortionType = camera::EDISTORTION::DISTORTION_NONE;
         std::shared_ptr<camera::Distortion> distortion = intrinsicCasted->getDistortion();
         if (distortion)
         {
+            distortionType = distortion->getType();
             ODoubleArrayProperty(userProps, "mvg_distortionParams").set(distortion->getParameters());
+            OBoolProperty(userProps, "mvg_distortionLocked").set(distortion->isLocked());
         }
+
         // Undistortion parameters and offset
+        camera::EUNDISTORTION undistortionType = camera::EUNDISTORTION::UNDISTORTION_NONE;
         std::shared_ptr<camera::Undistortion> undistortion = intrinsicCasted->getUndistortion();
         if (undistortion)
         {
+            undistortionType = undistortion->getType();
             ODoubleArrayProperty(userProps, "mvg_undistortionParams").set(undistortion->getParameters());
             ODoubleProperty(userProps, "mvg_undistortionOffsetX").set(undistortion->getOffset().x());
             ODoubleProperty(userProps, "mvg_undistortionOffsetY").set(undistortion->getOffset().y());
+            ODoubleProperty(userProps, "mvg_undistortionDiagonal").set(undistortion->getDiagonal());
+            ODoubleProperty(userProps, "mvg_undistortionPixelAspectRatio").set(undistortion->getPixelAspectRatio());
         }
+        
+        OStringProperty(userProps, "mvg_distortionType").set(EDISTORTION_enumToString(distortionType));
+        OStringProperty(userProps, "mvg_undistortionType").set(EUNDISTORTION_enumToString(undistortionType));
 
         camObj.getSchema().set(camSample);
     }
@@ -375,7 +398,7 @@ void AlembicExporter::addSfMSingleCamera(const sfmData::SfMData& sfmData, const 
     const std::shared_ptr<camera::IntrinsicBase> intrinsic =
       (flagsPart & ESfMData::INTRINSICS) ? sfmData.getIntrinsicSharedPtr(view.getIntrinsicId()) : nullptr;
 
-    if (sfmData.isPoseAndIntrinsicDefined(&view) && (flagsPart & ESfMData::EXTRINSICS))
+    if (sfmData.isPoseAndIntrinsicDefined(view) && (flagsPart & ESfMData::EXTRINSICS))
         _dataImpl->addCamera(name, view, pose, intrinsic, nullptr, &_dataImpl->_mvgCameras);
     else
         _dataImpl->addCamera(name, view, pose, intrinsic, nullptr, &_dataImpl->_mvgCamerasUndefined);
@@ -637,8 +660,7 @@ void AlembicExporter::addCameraKeyframe(const geometry::Pose3& pose,
                                         const camera::Pinhole* cam,
                                         const std::string& imagePath,
                                         IndexT viewId,
-                                        IndexT intrinsicId,
-                                        float sensorWidthMM)
+                                        IndexT intrinsicId)
 {
     Eigen::Matrix4d M = Eigen::Matrix4d::Identity();
     M(1, 1) = -1;
@@ -671,23 +693,37 @@ void AlembicExporter::addCameraKeyframe(const geometry::Pose3& pose,
     // Camera intrinsic parameters
     CameraSample camSample;
 
+    const Vec2 & scale = cam->getScale();
+    const Vec2 & offset = cam->getOffset();
+    
     // Take the max of the image size to handle the case where the image is in portrait mode
     const float imgWidth = cam->w();
     const float imgHeight = cam->h();
+    const float sensorWidth = cam->sensorWidth();
+    const float sensorHeight = cam->sensorHeight();
     const float sensorWidth_pix = std::max(imgWidth, imgHeight);
-    const float focalLength_pix = static_cast<const float>(cam->getScale()(0));
-    const float focalLength_mm = sensorWidthMM * focalLength_pix / sensorWidth_pix;
-    const float pix2mm = sensorWidthMM / sensorWidth_pix;
-
+    const float focalLengthX_pix = static_cast<const float>(scale(0));
+    const float focalLengthY_pix = static_cast<const float>(scale(1));
+    const float focalLength_mm = sensorWidth * focalLengthX_pix / sensorWidth_pix;
+    const float squeeze = focalLengthX_pix / focalLengthY_pix;
+    const float pix2mm = sensorWidth / sensorWidth_pix;
+    
     // aliceVision: origin is (top,left) corner and orientation is (bottom,right)
     // ABC: origin is centered and orientation is (up,right)
     // Following values are in cm, hence the 0.1 multiplier
     const float haperture_cm = static_cast<const float>(0.1 * imgWidth * pix2mm);
     const float vaperture_cm = static_cast<const float>(0.1 * imgHeight * pix2mm);
+    
+    //Alembic Offset is the 2d motion of the camera which create the offset (opposite)
+    const float offsetX_cm = static_cast<const float>(-0.1 * offset(0) * pix2mm);
+    const float offsetY_cm = static_cast<const float>(-0.1 * (-offset(1)) * pix2mm);
 
     camSample.setFocalLength(focalLength_mm);
     camSample.setHorizontalAperture(haperture_cm);
     camSample.setVerticalAperture(vaperture_cm);
+    camSample.setLensSqueezeRatio(squeeze);
+    camSample.setHorizontalFilmOffset(offsetX_cm);
+    camSample.setVerticalFilmOffset(offsetY_cm);
 
     // Add sensor size in pixels as custom property
     std::vector<::uint32_t> sensorSize_pix = {cam->w(), cam->h()};

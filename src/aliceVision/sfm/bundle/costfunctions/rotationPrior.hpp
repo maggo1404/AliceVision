@@ -1,80 +1,51 @@
-// Copyright (c) 2023 AliceVision contributors.
-// This Source Code Form is subject to the terms of the Mozilla Public License,
-// v. 2.0. If a copy of the MPL was not distributed with this file,
-// You can obtain one at https://mozilla.org/MPL/2.0/.
+#pragma once
 
-#include <aliceVision/sfmData/SfMData.hpp>
-#include <aliceVision/geometry/lie.hpp>
-#include <Eigen/Core>
-#include <ceres/ceres.h>
+#include <aliceVision/camera/camera.hpp>
+#include <ceres/rotation.h>
 
 namespace aliceVision {
 namespace sfm {
 
-class CostRotationPrior : public ceres::SizedCostFunction<3, 16, 16>
+/**
+ * @brief Ceres functor to use a pair of pinhole on a pure rotation 2D constraint.
+ *
+ *  Data parameter blocks are the following <3,6,6>
+ *  - 3 => dimension of the residuals,
+ *  - 6 => the camera extrinsic data block for the first view
+ *  - 6 => the camera extrinsic data block for the second view
+ */
+struct RotationPriorErrorFunctor
 {
-  public:
-    explicit CostRotationPrior(const Eigen::Matrix3d& two_R_one)
-      : _two_R_one(two_R_one)
+    explicit RotationPriorErrorFunctor(const Eigen::Matrix3d& two_R_one)
+      : m_two_R_one(two_R_one)
     {}
 
-    bool Evaluate(double const* const* parameters, double* residuals, double** jacobians) const override
+    /**
+     * @param[in] cam_Rt: Camera parameterized using one block of 6 parameters [R;t]:
+     *   - 3 for rotation(angle axis), 3 for translation
+     * @param[in] pos_3dpoint
+     * @param[out] out_residuals
+     */
+    template<typename T>
+    bool operator()(const T* const cam_R1, const T* const cam_R2, T* out_residuals) const
     {
-        const double* parameter_pose_one = parameters[0];
-        const double* parameter_pose_two = parameters[1];
+        Eigen::Matrix<T, 3, 3> oneRo, twoRo, twoRone, R_error;
 
-        const Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>> oneTo(parameter_pose_one);
-        const Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>> twoTo(parameter_pose_two);
+        ceres::AngleAxisToRotationMatrix(cam_R1, oneRo.data());
+        ceres::AngleAxisToRotationMatrix(cam_R2, twoRo.data());
+        twoRone = twoRo * oneRo.transpose();
+        R_error = twoRone * m_two_R_one.transpose();
 
-        Eigen::Matrix<double, 3, 3> oneRo = oneTo.block<3, 3>(0, 0);
-        Eigen::Matrix<double, 3, 3> twoRo = twoTo.block<3, 3>(0, 0);
+        ceres::RotationMatrixToAngleAxis(R_error.data(), out_residuals);
 
-        Eigen::Matrix3d two_R_one_est = twoRo * oneRo.transpose();
-        Eigen::Matrix3d error_R = two_R_one_est * _two_R_one.transpose();
-        Eigen::Vector3d error_r = SO3::logm(error_R);
-
-        residuals[0] = error_r(0);
-        residuals[1] = error_r(1);
-        residuals[2] = error_r(2);
-
-        if (jacobians == nullptr)
-        {
-            return true;
-        }
-
-        if (jacobians[0])
-        {
-            Eigen::Map<Eigen::Matrix<double, 3, 16, Eigen::RowMajor>> J(jacobians[0]);
-
-            Eigen::Matrix<double, 3, 9> J9 = SO3::dlogmdr(error_R) * getJacobian_AB_wrt_A<3, 3, 3>(two_R_one_est, _two_R_one.transpose()) *
-                                             getJacobian_AB_wrt_B<3, 3, 3>(twoRo, oneRo.transpose()) * getJacobian_At_wrt_A<3, 3>() *
-                                             getJacobian_AB_wrt_A<3, 3, 3>(Eigen::Matrix3d::Identity(), oneRo);
-
-            J.fill(0);
-            J.block<3, 3>(0, 0) = J9.block<3, 3>(0, 0);
-            J.block<3, 3>(0, 4) = J9.block<3, 3>(0, 3);
-            J.block<3, 3>(0, 8) = J9.block<3, 3>(0, 6);
-        }
-
-        if (jacobians[1])
-        {
-            Eigen::Map<Eigen::Matrix<double, 3, 16, Eigen::RowMajor>> J(jacobians[1]);
-
-            Eigen::Matrix<double, 3, 9> J9 = SO3::dlogmdr(error_R) * getJacobian_AB_wrt_A<3, 3, 3>(two_R_one_est, _two_R_one.transpose()) *
-                                             getJacobian_AB_wrt_A<3, 3, 3>(twoRo, oneRo.transpose()) *
-                                             getJacobian_AB_wrt_A<3, 3, 3>(Eigen::Matrix3d::Identity(), twoRo);
-
-            J.fill(0);
-            J.block<3, 3>(0, 0) = J9.block<3, 3>(0, 0);
-            J.block<3, 3>(0, 4) = J9.block<3, 3>(0, 3);
-            J.block<3, 3>(0, 8) = J9.block<3, 3>(0, 6);
-        }
+        out_residuals[0] *= 180.0 / M_PI;
+        out_residuals[1] *= 180.0 / M_PI;
+        out_residuals[2] *= 180.0 / M_PI;
 
         return true;
     }
 
-  private:
-    Eigen::Matrix3d _two_R_one;
+    Eigen::Matrix3d m_two_R_one;
 };
 
 }  // namespace sfm

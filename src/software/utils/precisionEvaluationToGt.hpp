@@ -9,6 +9,7 @@
 
 #include <aliceVision/numeric/numeric.hpp>
 #include <aliceVision/geometry/rigidTransformation3D.hpp>
+#include <aliceVision/numeric/BoxStats.hpp>
 
 #include <aliceVision/utils/Histogram.hpp>
 #include <dependencies/htmlDoc/htmlDoc.hpp>

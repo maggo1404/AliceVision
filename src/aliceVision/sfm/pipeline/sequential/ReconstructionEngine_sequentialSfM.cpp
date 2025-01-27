@@ -10,9 +10,10 @@
 #include <aliceVision/sfm/utils/statistics.hpp>
 #include <aliceVision/sfmDataIO/sfmDataIO.hpp>
 #include <aliceVision/sfm/bundle/BundleAdjustmentCeres.hpp>
-#include <aliceVision/sfm/bundle/BundleAdjustmentSymbolicCeres.hpp>
 #include <aliceVision/sfm/sfmFilters.hpp>
 #include <aliceVision/sfm/sfmStatistics.hpp>
+#include <aliceVision/sfm/utils/preprocess.hpp>
+#include <aliceVision/numeric/BoxStats.hpp>
 
 #include <aliceVision/feature/FeaturesPerView.hpp>
 #include <aliceVision/graph/connectedComponent.hpp>
@@ -30,6 +31,7 @@
 #include <aliceVision/system/MemoryInfo.hpp>
 #include <aliceVision/track/TracksBuilder.hpp>
 #include <aliceVision/track/tracksUtils.hpp>
+#include <aliceVision/utils/filesIO.hpp>
 
 #include <dependencies/htmlDoc/htmlDoc.hpp>
 
@@ -152,7 +154,7 @@ ReconstructionEngine_sequentialSfM::ReconstructionEngine_sequentialSfM(const SfM
     }
 
     // create sfm intermediate step folder
-    if (!fs::exists(_sfmStepFolder) && _params.logIntermediateSteps)
+    if (!utils::exists(_sfmStepFolder) && _params.logIntermediateSteps)
         fs::create_directory(_sfmStepFolder);
 
     // Set up the resection ID
@@ -186,7 +188,7 @@ bool ReconstructionEngine_sequentialSfM::process()
         // If we have already reconstructed landmarks, we need to recognize the corresponding tracks
         // and update the landmarkIds accordingly.
         // Note: each landmark has a corresponding track with the same id (landmarkId == trackId).
-        remapLandmarkIdsToTrackIds();
+        remapLandmarkIdsToTrackIds(_sfmData, _map_tracks);
 
         if (_params.useLocalBundleAdjustment)
         {
@@ -401,62 +403,6 @@ void ReconstructionEngine_sequentialSfM::registerChanges(std::set<IndexT>& linke
     }
 }
 
-void ReconstructionEngine_sequentialSfM::remapLandmarkIdsToTrackIds()
-{
-    using namespace track;
-
-    // get unmap landmarks
-    Landmarks landmarks;
-
-    // clear sfmData structure and store them locally
-    std::swap(landmarks, _sfmData.getLandmarks());
-
-    // builds landmarks temporary comparison structure
-    // ObsKey <ViewId, FeatId, decType>
-    // ObsToLandmark <ObsKey, LandmarkId>
-    using ObsKey = std::tuple<IndexT, IndexT, feature::EImageDescriberType>;
-    using ObsToLandmark = std::map<ObsKey, IndexT>;
-
-    ObsToLandmark obsToLandmark;
-
-    ALICEVISION_LOG_DEBUG("Builds landmarks temporary comparison structure");
-
-    for (const auto& landmarkPair : landmarks)
-    {
-        const IndexT landmarkId = landmarkPair.first;
-        const IndexT firstViewId = landmarkPair.second.getObservations().begin()->first;
-        const IndexT firstFeatureId = landmarkPair.second.getObservations().begin()->second.getFeatureId();
-        const feature::EImageDescriberType descType = landmarkPair.second.descType;
-
-        obsToLandmark.emplace(ObsKey(firstViewId, firstFeatureId, descType), landmarkId);
-    }
-
-    ALICEVISION_LOG_DEBUG("Find corresponding landmark id per track id");
-
-    // find corresponding landmark id per track id
-    for (const auto& trackPair : _map_tracks)
-    {
-        const IndexT trackId = trackPair.first;
-        const Track& track = trackPair.second;
-
-        for (const auto& featView : track.featPerView)
-        {
-            const ObsToLandmark::const_iterator it = obsToLandmark.find(ObsKey(featView.first, featView.second.featureId, track.descType));
-
-            if (it != obsToLandmark.end())
-            {
-                // re-insert the landmark with the new id
-                _sfmData.getLandmarks().emplace(trackId, landmarks.find(it->second)->second);
-                break;  // one landmark per track
-            }
-        }
-    }
-
-    ALICEVISION_LOG_INFO("Landmark ids to track ids remapping: " << std::endl
-                                                                 << "\t- # tracks: " << _map_tracks.size() << std::endl
-                                                                 << "\t- # input landmarks: " << landmarks.size() << std::endl
-                                                                 << "\t- # output landmarks: " << _sfmData.getLandmarks().size());
-}
 
 double ReconstructionEngine_sequentialSfM::incrementalReconstruction()
 {
@@ -1223,9 +1169,9 @@ bool ReconstructionEngine_sequentialSfM::makeInitialPair3D(const Pair& currentPa
         const std::size_t j = (++iter)->second.featureId;
 
         Vec2 feat = _featuresPerView->getFeatures(I, iterT->second.descType)[i].coords().cast<double>();
-        xI.col(cptIndex) = camI->get_ud_pixel(feat);
+        xI.col(cptIndex) = camI->getUndistortedPixel(feat);
         feat = _featuresPerView->getFeatures(J, iterT->second.descType)[j].coords().cast<double>();
-        xJ.col(cptIndex) = camJ->get_ud_pixel(feat);
+        xJ.col(cptIndex) = camJ->getUndistortedPixel(feat);
     }
     ALICEVISION_LOG_INFO(n << " matches in the image pair for the initial pose estimation.");
 
@@ -1416,9 +1362,9 @@ bool ReconstructionEngine_sequentialSfM::getBestInitialImagePairs(std::vector<Pa
             const auto& viewJ = _featuresPerView->getFeatures(J, iterT->second.descType);
 
             Vec2 feat = viewI[i].coords().cast<double>();
-            xI.col(cptIndex) = camI->get_ud_pixel(feat);
+            xI.col(cptIndex) = camI->getUndistortedPixel(feat);
             feat = viewJ[j].coords().cast<double>();
-            xJ.col(cptIndex) = camJ->get_ud_pixel(feat);
+            xJ.col(cptIndex) = camJ->getUndistortedPixel(feat);
         }
 
         // Robust estimation of the relative pose
@@ -1567,7 +1513,7 @@ bool ReconstructionEngine_sequentialSfM::computeResection(const IndexT viewId, R
 
     // Get back featId associated to a tracksID already reconstructed.
     // These 2D/3D associations will be used for the resection.
-    getFeatureIdInViewPerTrack(_map_tracks, resectionData.tracksId, viewId, &resectionData.featuresId);
+    getFeatureIdInViewPerTrack(_map_tracks, resectionData.tracksId, viewId, resectionData.featuresId);
 
     // Localize the image inside the SfM reconstruction
     resectionData.pt2D.resize(2, resectionData.tracksId.size());
@@ -1786,7 +1732,7 @@ ObservationData getObservationData(const SfMData& scene, feature::FeaturesPerVie
 
     const auto& feature = featuresPerView->getFeatures(viewId, track.descType)[track.featPerView.at(viewId).featureId];
     Vec2 x = feature.coords().cast<double>();
-    Vec2 xUd = cam->get_ud_pixel(x);  // undistorted 2D point
+    Vec2 xUd = cam->getUndistortedPixel(x);  // undistorted 2D point
 
     return {camPinHole, pose, P, x, xUd};
 }
@@ -2062,8 +2008,8 @@ void ReconstructionEngine_sequentialSfM::triangulate2Views(SfMData& scene,
                     }
 
                     Vec3 X_euclidean = Vec3::Zero();
-                    const Vec2 xI_ud = camI->get_ud_pixel(xI);
-                    const Vec2 xJ_ud = camJ->get_ud_pixel(xJ);
+                    const Vec2 xI_ud = camI->getUndistortedPixel(xI);
+                    const Vec2 xJ_ud = camJ->getUndistortedPixel(xJ);
                     const Mat34 pI = camIPinHole->getProjectiveEquivalent(poseI);
                     const Mat34 pJ = camJPinHole->getProjectiveEquivalent(poseJ);
 

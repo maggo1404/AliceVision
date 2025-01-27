@@ -31,8 +31,7 @@ namespace sfm {
 
 std::istream& operator>>(std::istream& in, MarkerWithCoord& marker)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     std::vector<std::string> markerCoord;
     boost::split(markerCoord, token, boost::algorithm::is_any_of(":="));
     if (markerCoord.size() != 2)
@@ -102,6 +101,7 @@ bool computeSimilarityFromCommonViews(const sfmData::SfMData& sfmDataA,
         return true;
     }
 
+
     // Compute rigid transformation p'i = S R pi + t
     double S;
     Vec3 t;
@@ -114,9 +114,82 @@ bool computeSimilarityFromCommonViews(const sfmData::SfMData& sfmDataA,
     ALICEVISION_LOG_DEBUG("There are " << reconstructedCommonViewIds.size() << " common cameras and " << inliers.size()
                                        << " were used to compute the similarity transform.");
 
-    *out_S = S;
-    *out_R = R;
-    *out_t = t;
+
+    //Check if selected point cloud have enough information to give a correct information
+    Eigen::Vector3d meanA = Eigen::Vector3d::Zero();
+    Eigen::Vector3d meanB = Eigen::Vector3d::Zero();
+
+    for (auto item : inliers)
+    {
+        meanA += xA.col(item);
+        meanB += xB.col(item);
+    }
+
+    meanA /= inliers.size();
+    meanB /= inliers.size();
+
+    Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
+    for (auto item : inliers)
+    {
+        cov += (xA.col(item) - meanA) * (xB.col(item) - meanA).transpose();
+    }
+
+    Eigen::JacobiSVD<Eigen::Matrix3d, ComputeFullU | ComputeFullV> svd(cov);
+    double ratio = svd.singularValues()[0] / svd.singularValues()[1];
+    if (ratio < 1e3)
+    {
+        *out_S = S;
+        *out_R = R;
+        *out_t = t;
+
+        return true;
+    }
+
+    ALICEVISION_LOG_INFO("Trajectory seems to be singular. Use another algorithm.");
+    
+
+    // If point cloud is badly conditionned let's try to add some
+    // Points from the axis
+    // Move input point in appropriate container
+    xA = Mat(3, reconstructedCommonViewIds.size() * 4);
+    xB = Mat(3, reconstructedCommonViewIds.size() * 4);
+    for (std::size_t i = 0; i < reconstructedCommonViewIds.size(); ++i)
+    {
+        auto viewIdPair = reconstructedCommonViewIds[i];
+        auto poseA = sfmDataA.getPose(sfmDataA.getView(viewIdPair.first)).getTransform();
+        auto poseB = sfmDataB.getPose(sfmDataB.getView(viewIdPair.second)).getTransform();
+
+        
+        poseA = poseA.transformSRt(S,Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+        poseA = poseA.inverse();
+        poseB = poseB.inverse();
+        
+        xA.col(i * 4 + 0) = poseA(Eigen::Vector3d::Zero());
+        xA.col(i * 4 + 1) = poseA(Eigen::Vector3d::UnitX());
+        xA.col(i * 4 + 2) = poseA(Eigen::Vector3d::UnitY());
+        xA.col(i * 4 + 3) = poseA(Eigen::Vector3d::UnitZ());
+
+        xB.col(i * 4 + 0) = poseB(Eigen::Vector3d::Zero());
+        xB.col(i * 4 + 1) = poseB(Eigen::Vector3d::UnitX());
+        xB.col(i * 4 + 2) = poseB(Eigen::Vector3d::UnitY());
+        xB.col(i * 4 + 3) = poseB(Eigen::Vector3d::UnitZ());
+    }
+
+    inliers.clear();
+    double nS = 1.0;
+    Eigen::Vector3d nt;
+    Eigen::Matrix3d nR;
+    if (!aliceVision::geometry::ACRansac_FindRTS(xA, xB, randomNumberGenerator, nS, nt, nR, inliers, true))
+    {
+        return false;
+    }
+
+    geometry::Pose3 p;
+    p = p.transformSRt(S, R, t);
+    
+    *out_S = S * nS;
+    *out_R = nR;
+    *out_t = nt;
 
     return true;
 }
@@ -468,6 +541,190 @@ bool computeSimilarityFromCommonMarkers(const sfmData::SfMData& sfmDataA,
     return true;
 }
 
+bool computeSimilarityFromCommonLandmarks(const sfmData::SfMData& sfmDataA,
+                                        const sfmData::SfMData& sfmDataB,
+                                        std::mt19937& randomNumberGenerator,
+                                        double* out_S,
+                                        Mat3* out_R,
+                                        Vec3* out_t)
+{
+    //create map featureId, landmarkId
+    std::map<IndexT, IndexT> mapFeatureIdToLandmarkId;
+    for (const auto & plandmark : sfmDataA.getLandmarks())
+    {
+        for (const auto & pobs : plandmark.second.getObservations())
+        {
+            IndexT featureId = pobs.second.getFeatureId();
+            mapFeatureIdToLandmarkId[featureId] = plandmark.first;
+        }
+    }
+
+    std::map<IndexT, IndexT> mapLandmarkAtoLandmarkB;
+    for (const auto & plandmark : sfmDataB.getLandmarks())
+    {
+        for (const auto & pobs : plandmark.second.getObservations())
+        {
+            IndexT featureId = pobs.second.getFeatureId();
+            
+            auto found = mapFeatureIdToLandmarkId.find(featureId);
+            if (found == mapFeatureIdToLandmarkId.end())
+            {
+                continue;
+            }
+
+            mapLandmarkAtoLandmarkB[found->second] = plandmark.first;
+        }
+    }
+
+    // Move input point in appropriate container
+    Mat xA(3, mapLandmarkAtoLandmarkB.size());
+    Mat xB(3, mapLandmarkAtoLandmarkB.size());
+    
+    int count = 0;
+    for (auto & pair : mapLandmarkAtoLandmarkB)
+    {
+        xA.col(count) = sfmDataA.getLandmarks().at(pair.first).X;
+        xB.col(count) = sfmDataB.getLandmarks().at(pair.second).X;
+        count++;
+    }
+
+    // Compute rigid transformation p'i = S R pi + t
+    double S;
+    Vec3 t;
+    Mat3 R;
+    std::vector<std::size_t> inliers;
+
+    if (!aliceVision::geometry::ACRansac_FindRTS(xA, xB, randomNumberGenerator, S, t, R, inliers, true))
+    {
+        std::cout << "merde" << std::endl;
+        return false;
+    }
+
+    ALICEVISION_LOG_DEBUG("There are " << mapLandmarkAtoLandmarkB.size() << " common markers and " << inliers.size()
+                                       << " were used to compute the similarity transform.");
+
+    *out_S = S;
+    *out_R = R;
+    *out_t = t;
+
+    return true;
+}
+
+bool computeSimilarityFromPairs(const std::vector<Vec3> & ptsA,
+                                const std::vector<Vec3> & ptsB,
+                                std::mt19937& randomNumberGenerator,
+                                double* out_S,
+                                Mat3* out_R,
+                                Vec3* out_t)
+{
+    // Move input point in appropriate container
+    Mat xA(3, ptsA.size());
+    Mat xB(3, ptsB.size());
+    
+    int count = 0;
+    for (auto & p : ptsA)
+    {
+        xA.col(count) = p;
+        count++;
+    }
+
+    count = 0;
+    for (auto & p : ptsB)
+    {
+        xB.col(count) = p;
+        count++;
+    }
+
+    // Compute rigid transformation p'i = S R pi + t
+    double S;
+    Vec3 t;
+    Mat3 R;
+    std::vector<std::size_t> inliers;
+
+    if (!aliceVision::geometry::ACRansac_FindRTS(xA, xB, randomNumberGenerator, S, t, R, inliers, true))
+    {
+        std::cout << "merde" << std::endl;
+        return false;
+    }
+
+    ALICEVISION_LOG_DEBUG("There are " << ptsA.size() << " common points and " << inliers.size()
+                                       << " were used to compute the similarity transform.");
+
+    *out_S = S;
+    *out_R = R;
+    *out_t = t;
+
+    return true;
+}
+
+bool computeNewCoordinateSystemFromPairs(const sfmData::SfMData& sfmDataA,
+                                        const sfmData::SfMData& sfmDataB,
+                                        std::mt19937& randomNumberGenerator,
+                                        double* out_S,
+                                        Mat3* out_R,
+                                        Vec3* out_t)
+{
+    //create map featureId, landmarkId
+    std::map<IndexT, IndexT> mapFeatureIdToLandmarkId;
+    for (const auto & plandmark : sfmDataA.getLandmarks())
+    {
+        for (const auto & pobs : plandmark.second.getObservations())
+        {
+            IndexT featureId = pobs.second.getFeatureId();
+            mapFeatureIdToLandmarkId[featureId] = plandmark.first;
+        }
+    }
+
+    std::map<IndexT, IndexT> mapLandmarkAtoLandmarkB;
+    for (const auto & plandmark : sfmDataB.getLandmarks())
+    {
+        for (const auto & pobs : plandmark.second.getObservations())
+        {
+            IndexT featureId = pobs.second.getFeatureId();
+            
+            auto found = mapFeatureIdToLandmarkId.find(featureId);
+            if (found == mapFeatureIdToLandmarkId.end())
+            {
+                continue;
+            }
+
+            mapLandmarkAtoLandmarkB[found->second] = plandmark.first;
+        }
+    }
+
+    // Move input point in appropriate container
+    Mat xA(3, mapLandmarkAtoLandmarkB.size());
+    Mat xB(3, mapLandmarkAtoLandmarkB.size());
+    
+    int count = 0;
+    for (auto & pair : mapLandmarkAtoLandmarkB)
+    {
+        xA.col(count) = sfmDataA.getLandmarks().at(pair.first).X;
+        xB.col(count) = sfmDataB.getLandmarks().at(pair.second).X;
+        count++;
+    }
+
+    // Compute rigid transformation p'i = S R pi + t
+    double S;
+    Vec3 t;
+    Mat3 R;
+    std::vector<std::size_t> inliers;
+
+    if (!aliceVision::geometry::ACRansac_FindRTS(xA, xB, randomNumberGenerator, S, t, R, inliers, true))
+    {
+        return false;
+    }
+
+    ALICEVISION_LOG_DEBUG("There are " << mapLandmarkAtoLandmarkB.size() << " common markers and " << inliers.size()
+                                       << " were used to compute the similarity transform.");
+
+    *out_S = S;
+    *out_R = R;
+    *out_t = t;
+
+    return true;
+}
+
 /**
  * Image orientation CCW
  */
@@ -505,7 +762,7 @@ void computeNewCoordinateSystemFromCamerasXAxis(const sfmData::SfMData& sfmData,
     {
         const sfmData::View& view = *viewIt.second.get();
 
-        if (sfmData.isPoseAndIntrinsicDefined(&view))
+        if (sfmData.isPoseAndIntrinsicDefined(view))
         {
             const sfmData::EEXIFOrientation orientation = view.getImage().getMetadataOrientation();
             const sfmData::CameraPose camPose = sfmData.getPose(view);
@@ -547,7 +804,7 @@ void computeNewCoordinateSystemFromCamerasXAxis(const sfmData::SfMData& sfmData,
     {
         const sfmData::View& view = *viewIt.second.get();
 
-        if (sfmData.isPoseAndIntrinsicDefined(&view))
+        if (sfmData.isPoseAndIntrinsicDefined(view))
         {
             const sfmData::EEXIFOrientation orientation = view.getImage().getMetadataOrientation();
             const sfmData::CameraPose camPose = sfmData.getPose(view);
@@ -753,7 +1010,7 @@ IndexT getCenterCameraView(const sfmData::SfMData& sfmData)
     for (auto& viewIt : sfmData.getViews())
     {
         const sfmData::View& v = *viewIt.second;
-        if (!sfmData.isPoseAndIntrinsicDefined(&v))
+        if (!sfmData.isPoseAndIntrinsicDefined(v))
             continue;
         const auto& pose = sfmData.getPose(v);
         const double dist = (pose.getTransform().center() - camerasCenter).norm();

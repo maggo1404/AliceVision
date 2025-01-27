@@ -9,6 +9,7 @@
 #include <aliceVision/image/all.hpp>
 #include <aliceVision/image/conversion.hpp>
 #include <aliceVision/system/main.hpp>
+#include <aliceVision/utils/filesIO.hpp>
 #include <aliceVision/cmdline/cmdline.hpp>
 #include <boost/program_options.hpp>
 
@@ -83,7 +84,7 @@ bool exportToMatlab(const SfMData& sfm_data, const std::string& outDirectory)
         for (const auto& v : sfm_data.getViews())
         {
             const View& view = *v.second.get();
-            if (!sfm_data.isPoseAndIntrinsicDefined(&view))
+            if (!sfm_data.isPoseAndIntrinsicDefined(view))
                 continue;
 
             const Pose3 pose = sfm_data.getPose(view).getTransform();
@@ -110,7 +111,7 @@ bool exportToMatlab(const SfMData& sfm_data, const std::string& outDirectory)
         for (const auto& v : sfm_data.getViews())
         {
             const View& view = *v.second.get();
-            if (!sfm_data.isPoseAndIntrinsicDefined(&view))
+            if (!sfm_data.isPoseAndIntrinsicDefined(view))
                 continue;
             const IntrinsicBase& intrinsics = *sfm_data.getIntrinsics().at(view.getIntrinsicId()).get();
             cameraIntrinsicsFile << view.getViewId() << " " << camera::EINTRINSIC_enumToString(intrinsics.getType());
@@ -149,7 +150,7 @@ int aliceVision_main(int argc, char* argv[])
     // export
     {
         // Create output dir
-        if (!fs::exists(outputFolder))
+        if (!utils::exists(outputFolder))
             fs::create_directory(outputFolder);
 
         // Read the input SfM scene

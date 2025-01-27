@@ -1,4 +1,14 @@
 # Headers
+set(sfm_bundle_files_headers
+  bundle/BundleAdjustment.hpp
+  bundle/BundleAdjustmentCeres.hpp
+)
+
+# Sources
+set(sfm_bundle_files_sources
+  bundle/BundleAdjustmentCeres.cpp
+)
+
 set(sfm_files_headers
   pipeline/global/GlobalSfMRotationAveragingSolver.hpp
   pipeline/global/GlobalSfMTranslationAveragingSolver.hpp
@@ -14,16 +24,30 @@ set(sfm_files_headers
   pipeline/RelativePoseInfo.hpp
   pipeline/structureFromKnownPoses/StructureEstimationFromKnownPoses.hpp
   pipeline/panorama/ReconstructionEngine_panorama.hpp
+  pipeline/bootstrapping/EstimateAngle.hpp
+  pipeline/bootstrapping/PairsScoring.hpp
+  pipeline/bootstrapping/Bootstrap.hpp
+  pipeline/expanding/SfmTriangulation.hpp
+  pipeline/expanding/SfmResection.hpp
+  pipeline/expanding/SfmBundle.hpp
+  pipeline/expanding/ExpansionHistory.hpp
+  pipeline/expanding/ExpansionChunk.hpp
+  pipeline/expanding/ExpansionIteration.hpp
+  pipeline/expanding/ExpansionPostProcess.hpp
+  pipeline/expanding/ExpansionPostProcessRig.hpp
+  pipeline/expanding/ExpansionPolicy.hpp
+  pipeline/expanding/ExpansionPolicyLegacy.hpp
+  pipeline/expanding/ExpansionProcess.hpp
+  pipeline/expanding/ConnexityGraph.hpp
+  pipeline/expanding/LbaPolicy.hpp
+  pipeline/expanding/LbaPolicyConnexity.hpp
   pipeline/regionsIO.hpp
   utils/alignment.hpp
   utils/statistics.hpp
+  utils/preprocess.hpp
   utils/syntheticScene.hpp
-  bundle/BundleAdjustment.hpp
-  bundle/BundleAdjustmentCeres.hpp
-  bundle/BundleAdjustmentSymbolicCeres.hpp
   LocalBundleAdjustmentGraph.hpp
   FrustumFilter.hpp
-  ResidualErrorFunctor.hpp
   filters.hpp
   generateReport.hpp
   sfm.hpp
@@ -44,18 +68,42 @@ set(sfm_files_sources
   pipeline/RelativePoseInfo.cpp
   pipeline/structureFromKnownPoses/StructureEstimationFromKnownPoses.cpp
   pipeline/panorama/ReconstructionEngine_panorama.cpp
+  pipeline/bootstrapping/EstimateAngle.cpp
+  pipeline/bootstrapping/PairsScoring.cpp
+  pipeline/bootstrapping/Bootstrap.cpp
+  pipeline/expanding/SfmTriangulation.cpp
+  pipeline/expanding/SfmResection.cpp
+  pipeline/expanding/SfmBundle.cpp
+  pipeline/expanding/ExpansionHistory.cpp
+  pipeline/expanding/ExpansionChunk.cpp
+  pipeline/expanding/ExpansionIteration.cpp
+  pipeline/expanding/ExpansionPolicyLegacy.cpp
+  pipeline/expanding/ExpansionPostProcessRig.cpp
+  pipeline/expanding/ExpansionProcess.cpp
+  pipeline/expanding/ConnexityGraph.cpp
+  pipeline/expanding/LbaPolicyConnexity.cpp
   pipeline/regionsIO.cpp
   utils/alignment.cpp
+  utils/preprocess.cpp
   utils/statistics.cpp
   utils/syntheticScene.cpp
-  bundle/BundleAdjustmentCeres.cpp
-  bundle/BundleAdjustmentSymbolicCeres.cpp
   LocalBundleAdjustmentGraph.cpp
   FrustumFilter.cpp
   generateReport.cpp
   sfmFilters.cpp
   sfmStatistics.cpp
   sfmTriangulation.cpp
+)
+
+alicevision_add_library(aliceVision_sfm_bundle
+  SOURCES ${sfm_bundle_files_headers} ${sfm_bundle_files_sources}
+  PUBLIC_LINKS
+    aliceVision_system
+    aliceVision_numeric
+    aliceVision_geometry
+    aliceVision_camera
+    aliceVision_sfmData
+    ${CERES_LIBRARIES}
 )
 
 alicevision_add_library(aliceVision_sfm
@@ -74,8 +122,9 @@ alicevision_add_library(aliceVision_sfm
     aliceVision_linearProgramming
     aliceVision_sfmData
     aliceVision_sfmDataIO
+    aliceVision_sfm_bundle
+    aliceVision_dataio
     Boost::boost
-    ${CERES_LIBRARIES}
   PRIVATE_LINKS
     ${LEMON_LIBRARY}
 )

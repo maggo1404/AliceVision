@@ -46,7 +46,7 @@ bool computeOptimalPanoramaSize(std::pair<int, int>& optimalSize, const sfmData:
     {
         // Ignore non positionned views
         const sfmData::View& view = *viewIt.second.get();
-        if (!sfmData.isPoseAndIntrinsicDefined(&view))
+        if (!sfmData.isPoseAndIntrinsicDefined(view))
         {
             continue;
         }
@@ -140,6 +140,7 @@ int aliceVision_main(int argc, char** argv)
 
     CmdLine cmdline("Warps the input images in the panorama coordinate system.\n"
                     "AliceVision panoramaWarping");
+
     cmdline.add(requiredParams);
     cmdline.add(optionalParams);
     if (!cmdline.execute(argc, argv))
@@ -249,7 +250,7 @@ int aliceVision_main(int argc, char** argv)
 
         // Retrieve view
         const sfmData::View& view = *viewIt;
-        if (!sfmData.isPoseAndIntrinsicDefined(&view))
+        if (!sfmData.isPoseAndIntrinsicDefined(view))
         {
             continue;
         }

@@ -7,6 +7,7 @@
 #include "KeyframeSelector.hpp"
 #include <aliceVision/sfmDataIO/viewIO.hpp>
 #include <aliceVision/system/Logger.hpp>
+#include <aliceVision/utils/filesIO.hpp>
 
 #include <random>
 #include <tuple>
@@ -19,8 +20,7 @@
 
 namespace fs = std::filesystem;
 
-namespace aliceVision {
-namespace keyframe {
+namespace aliceVision::keyframe {
 
 /**
  * @brief Get a random int in order to generate uid.
@@ -43,7 +43,7 @@ int getRandomInt()
 double findMedian(const std::vector<double>& vec)
 {
     std::vector<double> vecCopy = vec;
-    if (vecCopy.size() > 0 && vecCopy.size() % 2 == 0)
+    if (!vecCopy.empty() && vecCopy.size() % 2 == 0)
     {
         const auto medianIt1 = vecCopy.begin() + vecCopy.size() / 2 - 1;
         std::nth_element(vecCopy.begin(), medianIt1, vecCopy.end());
@@ -55,7 +55,7 @@ double findMedian(const std::vector<double>& vec)
 
         return (med1 + med2) / 2.0;
     }
-    else if (vecCopy.size() > 0)
+    else if (!vecCopy.empty())
     {
         const auto medianIt = vecCopy.begin() + vecCopy.size() / 2;
         std::nth_element(vecCopy.begin(), medianIt, vecCopy.end());
@@ -697,13 +697,13 @@ bool KeyframeSelector::writeSelection(const std::vector<std::string>& brands,
             if (_mediaPaths.size() > 1)
             {
                 const std::string rigFolder = _outputFolder + "/rig/";
-                if (!fs::exists(rigFolder))
+                if (!utils::exists(rigFolder))
                 {
                     fs::create_directory(rigFolder);
                 }
 
                 processedOutputFolder = rigFolder + std::to_string(id);
-                if (!fs::exists(processedOutputFolder))
+                if (!utils::exists(processedOutputFolder))
                 {
                     fs::create_directory(processedOutputFolder);
                 }
@@ -872,13 +872,13 @@ bool KeyframeSelector::exportFlowVisualisation(const std::size_t rescaledWidth)
         if (_mediaPaths.size() > 1)
         {
             const std::string rigFolder = _outputFolder + "/rig/";
-            if (!fs::exists(rigFolder))
+            if (!utils::exists(rigFolder))
             {
                 fs::create_directory(rigFolder);
             }
 
             processedOutputFolder = rigFolder + std::to_string(mediaIndex);
-            if (!fs::exists(processedOutputFolder))
+            if (!utils::exists(processedOutputFolder))
             {
                 fs::create_directory(processedOutputFolder);
             }
@@ -918,11 +918,10 @@ bool KeyframeSelector::exportFlowVisualisation(const std::size_t rescaledWidth)
             {
                 currentMat = readImage(feed, rescaledWidth);  // Read image and rescale it if requested
             }
-            catch (const std::invalid_argument& ex)
+            catch (const std::invalid_argument&)
             {
                 ALICEVISION_LOG_WARNING("Invalid or missing frame " << currentFrame + 1 << ", attempting to read frame " << currentFrame + 2 << ".");
-                bool success = feed.goToFrame(++currentFrame);
-                if (success)
+                if (feed.goToFrame(++currentFrame))
                     currentMat = readImage(feed, rescaledWidth);
                 else
                     ALICEVISION_THROW_ERROR("Could not go to frame " << currentFrame + 1 << " either. The feed might be corrupted.");
@@ -935,7 +934,9 @@ bool KeyframeSelector::exportFlowVisualisation(const std::size_t rescaledWidth)
 
                 cv::Mat flowParts[2];
                 cv::split(flow, flowParts);
-                cv::Mat magnitude, angle, magnNorm;
+                cv::Mat magnitude;
+                cv::Mat angle;
+                cv::Mat magnNorm;
                 cv::cartToPolar(flowParts[0], flowParts[1], magnitude, angle, true);
                 cv::normalize(magnitude, magnNorm, 0.0f, 1.0f, cv::NORM_MINMAX);
                 angle *= ((1.f / 360.f) * (180.f / 255.f));
@@ -1029,7 +1030,8 @@ double KeyframeSelector::computeSharpness(const cv::Mat& grayscaleImage, const s
     }
 
     double maxstd = 0.0;
-    int x, y;
+    int x = 1;
+    int y = 1;
 
     // Starts at 1 because the integral image is padded with 0s on the top and left borders
     for (y = 1; y < sum.rows - windowSize; y += windowSize / 4)
@@ -1063,7 +1065,7 @@ const double KeyframeSelector::computeSharpnessStd(const cv::Mat& sum,
                                                    const cv::Mat& squaredSum,
                                                    const int x,
                                                    const int y,
-                                                   const int windowSize,
+                                                   const std::size_t windowSize,
                                                    const cv::Mat& mask)
 {
     double totalCount = windowSize * windowSize;
@@ -1250,6 +1252,8 @@ bool KeyframeSelector::writeSfMData(const std::string& mediaPath,
 
 bool KeyframeSelector::writeSfMDataFromSfMData(const std::string& mediaPath)
 {
+    auto& keyframesPoses = _outputSfmKeyframes.getPoses();
+
     auto& keyframesViews = _outputSfmKeyframes.getViews();
     auto& framesViews = _outputSfmFrames.getViews();
 
@@ -1290,6 +1294,18 @@ bool KeyframeSelector::writeSfMDataFromSfMData(const std::string& mediaPath)
     {
         viewId = views[i]->getViewId();
         intrinsicId = views[i]->getIntrinsicId();
+        IndexT poseId = views[i]->getPoseId();
+
+        bool hasPose = inputSfm.isPoseAndIntrinsicDefined(viewId);
+        if (hasPose)
+        {
+            ALICEVISION_LOG_INFO("A fully calibrated view (Id:" << viewId << ") is moved to keyframes");
+            _selectedFrames[i] = '1';
+
+            //Make sure to keep the pose
+            keyframesPoses.emplace(poseId, inputSfm.getPoses().at(poseId));
+        }
+
         if (_selectedFrames[i] == '1')
         {
             keyframesViews.emplace(viewId, views[i]);
@@ -1484,7 +1500,13 @@ std::shared_ptr<camera::IntrinsicBase> KeyframeSelector::createIntrinsic(const s
                                                                          const double imageRatio,
                                                                          const std::size_t mediaIndex)
 {
-    auto intrinsic = sfmDataIO::getViewIntrinsic(view, focalLength, sensorWidth);
+    camera::EInitMode mode = camera::EInitMode::ESTIMATED;
+    if (sensorWidth <= 0)
+    {
+        mode = camera::EInitMode::UNKNOWN;
+    }
+    
+    auto intrinsic = sfmDataIO::getViewIntrinsic(view, mode, focalLength, sensorWidth);
     if (imageRatio > 1.0 && sensorWidth > -1.0)
     {
         intrinsic->setSensorWidth(sensorWidth);
@@ -1508,5 +1530,4 @@ std::shared_ptr<camera::IntrinsicBase> KeyframeSelector::createIntrinsic(const s
     return intrinsic;
 }
 
-}  // namespace keyframe
-}  // namespace aliceVision
+}  // namespace aliceVision::keyframe

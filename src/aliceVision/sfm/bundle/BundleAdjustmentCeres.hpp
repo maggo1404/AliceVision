@@ -12,6 +12,8 @@
 #include <aliceVision/sfm/bundle/BundleAdjustment.hpp>
 #include <aliceVision/sfm/LocalBundleAdjustmentGraph.hpp>
 #include <aliceVision/numeric/numeric.hpp>
+#include <aliceVision/sfmData/CameraPose.hpp>
+#include <aliceVision/camera/IntrinsicBase.hpp>
 
 #include <ceres/ceres.h>
 
@@ -25,7 +27,7 @@ class SfMData;
 
 namespace sfm {
 
-class BundleAdjustmentCeres : public BundleAdjustment
+class BundleAdjustmentCeres : public BundleAdjustment, ceres::EvaluationCallback
 {
   public:
     /**
@@ -55,6 +57,7 @@ class BundleAdjustmentCeres : public BundleAdjustment
         bool useParametersOrdering = true;
         bool summary = false;
         bool verbose = true;
+        bool useFocalPrior = true;
     };
 
     /**
@@ -134,6 +137,8 @@ class BundleAdjustmentCeres : public BundleAdjustment
      */
     bool adjust(sfmData::SfMData& sfmData, ERefineOptions refineOptions = REFINE_ALL);
 
+    virtual void PrepareForEvaluation(bool evaluate_jacobians, bool new_evaluation_point);
+
     /**
      * @brief Get bundle adjustment statistics structure
      * @return statistics structure const ptr
@@ -185,6 +190,14 @@ class BundleAdjustmentCeres : public BundleAdjustment
     void addConstraints2DToProblem(const sfmData::SfMData& sfmData, ERefineOptions refineOptions, ceres::Problem& problem);
 
     /**
+     * @brief Create a residual block for each point constraints
+     * @param[in] sfmData The input SfMData contains all the information about the reconstruction, notably the intrinsics
+     * @param[in] refineOptions The chosen refine flag
+     * @param[out] problem The Ceres bundle adjustement problem
+     */
+    void addConstraintsPointToProblem(const sfmData::SfMData& sfmData, ERefineOptions refineOptions, ceres::Problem& problem);
+
+    /**
      * @brief Create a residual block for each rotation priors
      * @param[in] sfmData The input SfMData contains all the information about the reconstruction, notably the intrinsics
      * @param[in] refineOptions The chosen refine flag
@@ -227,16 +240,17 @@ class BundleAdjustmentCeres : public BundleAdjustment
     std::vector<double*> _allParametersBlocks;
     /// poses blocks wrapper
     /// block: ceres angleAxis(3) + translation(3)
-    HashMap<IndexT, std::array<double, 6>> _posesBlocks;  // TODO : maybe we can use boost::flat_map instead of HashMap ?
+    std::map<IndexT, std::array<double, 6>> _posesBlocks;  // TODO : maybe we can use boost::flat_map instead of std::map ?
     /// intrinsics blocks wrapper
     /// block: intrinsics params
-    HashMap<IndexT, std::vector<double>> _intrinsicsBlocks;
+    std::map<IndexT, std::vector<double>> _intrinsicsBlocks;
+    std::map<IndexT, std::shared_ptr<camera::IntrinsicBase>> _intrinsicObjects;
     /// landmarks blocks wrapper
     /// block: 3d position(3)
-    HashMap<IndexT, std::array<double, 3>> _landmarksBlocks;
+    std::map<IndexT, std::array<double, 3>> _landmarksBlocks;
     /// rig sub-poses blocks wrapper
     /// block: ceres angleAxis(3) + translation(3)
-    HashMap<IndexT, HashMap<IndexT, std::array<double, 6>>> _rigBlocks;
+    std::map<IndexT, std::map<IndexT, std::array<double, 6>>> _rigBlocks;
 
     /// hinted order for ceres to eliminate blocks when solving.
     /// note: this ceres parameter is built internally and must be reset on each call to the solver.

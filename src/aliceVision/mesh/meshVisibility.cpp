@@ -164,6 +164,8 @@ void remapMeshVisibilities_meshItself(const mvsUtils::MultiViewParams& mp, Mesh&
     StaticVector<Point3d> normalsPerVertex;
     mesh.computeNormalsForPts(normalsPerVertex);
 
+    ALICEVISION_LOG_INFO("Start checking each vertex: " << mesh.pts.size() << " vertices.");
+
 #pragma omp parallel for
     for (int vi = 0; vi < mesh.pts.size(); ++vi)
     {
@@ -175,6 +177,13 @@ void remapMeshVisibilities_meshItself(const mvsUtils::MultiViewParams& mp, Mesh&
         for (std::size_t camIndex = 0; camIndex < nbCameras; ++camIndex)
         {
             const Point3d& c = mp.CArr[camIndex];
+
+            // Check if the point is in the camera's frutum.
+            // Project in image space and check that the pixel coordinates are in the image.
+            Pixel pix;
+            mp.getPixelFor3DPoint(&pix, v, camIndex);
+            if (!mp.isPixelInImage(pix, camIndex, 1))
+                continue;
 
             // check vertex normal (another solution would be to check each neighboring triangle)
             const double angle = angleBetwV1andV2((c - v).normalize(), normalsPerVertex[vi]);
@@ -192,6 +201,7 @@ void remapMeshVisibilities_meshItself(const mvsUtils::MultiViewParams& mp, Mesh&
             vertexVisibility.push_back(camIndex);
         }
     }
+    ALICEVISION_LOG_INFO("remapMeshVisibility based on triangles normals done.");
 }
 
 }  // namespace mesh

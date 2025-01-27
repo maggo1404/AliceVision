@@ -12,6 +12,7 @@
 #include <Alembic/AbcCoreOgawa/All.h>
 
 #include <aliceVision/version.hpp>
+#include <aliceVision/system/Logger.hpp>
 
 namespace aliceVision {
 namespace sfmDataIO {
@@ -398,6 +399,8 @@ bool readCamera(const Version& abcVersion,
     std::string mvg_intrinsicType = EINTRINSIC_enumToString(EINTRINSIC::PINHOLE_CAMERA);
     std::string mvg_intrinsicInitializationMode = EInitMode_enumToString(EInitMode::NONE);
     std::string mvg_intrinsicDistortionInitializationMode = EInitMode_enumToString(EInitMode::NONE);
+    std::string mvg_distortionType = EDISTORTION_enumToString(EDISTORTION::DISTORTION_NONE);
+    std::string mvg_undistortionType = EDISTORTION_enumToString(EDISTORTION::DISTORTION_NONE);
     std::vector<double> mvg_intrinsicParams;
     std::vector<IndexT> mvg_ancestorImagesParams;
     Vec2 initialFocalLengthPix = {-1, -1};
@@ -414,11 +417,19 @@ bool readCamera(const Version& abcVersion,
     IndexT resectionId = UndefinedIndexT;
     bool intrinsicLocked = false;
     bool poseLocked = false;
+    bool rotationOnly = false;
     bool poseIndependant = true;
     bool lockRatio = true;
+    bool lockOffset = false;
+    bool lockScale = false;
+    bool lockDistortion = false;
     std::vector<double> distortionParams;
     std::vector<double> undistortionParams;
     Vec2 undistortionOffset = {0, 0};
+    double undistortionDiagonal = 0.0;
+    double undistortionPixelAspectRatio = 1.0;
+    bool undistortionDesqueezed = false;
+    std::string serialNumber = "";
 
     if (userProps)
     {
@@ -455,6 +466,10 @@ bool readCamera(const Version& abcVersion,
             {
                 resectionId = getAbcProp_uint(userProps, *propHeader, "mvg_resectionId", sampleFrame);
             }
+            if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_intrinsicSerialNumber"))
+            {
+                serialNumber = getAbcProp<Alembic::Abc::IStringProperty>(userProps, *propHeader, "mvg_intrinsicSerialNumber", sampleFrame);
+            }
             if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_intrinsicLocked"))
             {
                 intrinsicLocked = getAbcProp<Alembic::Abc::IBoolProperty>(userProps, *propHeader, "mvg_intrinsicLocked", sampleFrame);
@@ -463,9 +478,21 @@ bool readCamera(const Version& abcVersion,
             {
                 lockRatio = getAbcProp<Alembic::Abc::IBoolProperty>(userProps, *propHeader, "mvg_intrinsicPixelRatioLocked", sampleFrame);
             }
+            if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_intrinsicOffsetLocked"))
+            {
+                lockOffset = getAbcProp<Alembic::Abc::IBoolProperty>(userProps, *propHeader, "mvg_intrinsicOffsetLocked", sampleFrame);
+            }
+            if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_intrinsicScaleLocked"))
+            {
+                lockScale = getAbcProp<Alembic::Abc::IBoolProperty>(userProps, *propHeader, "mvg_intrinsicScaleLocked", sampleFrame);
+            }
             if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_poseLocked"))
             {
                 poseLocked = getAbcProp<Alembic::Abc::IBoolProperty>(userProps, *propHeader, "mvg_poseLocked", sampleFrame);
+            }
+            if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_rotationOnly"))
+            {
+                rotationOnly = getAbcProp<Alembic::Abc::IBoolProperty>(userProps, *propHeader, "mvg_rotationOnly", sampleFrame);
             }
             if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_poseIndependant"))
             {
@@ -505,6 +532,14 @@ bool readCamera(const Version& abcVersion,
             if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_intrinsicType"))
             {
                 mvg_intrinsicType = getAbcProp<Alembic::Abc::IStringProperty>(userProps, *propHeader, "mvg_intrinsicType", sampleFrame);
+            }
+            if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_distortionType"))
+            {
+                mvg_distortionType = getAbcProp<Alembic::Abc::IStringProperty>(userProps, *propHeader, "mvg_distortionType", sampleFrame);
+            }
+            if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_undistortionType"))
+            {
+                mvg_undistortionType = getAbcProp<Alembic::Abc::IStringProperty>(userProps, *propHeader, "mvg_undistortionType", sampleFrame);
             }
             if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_intrinsicInitializationMode"))
             {
@@ -563,6 +598,10 @@ bool readCamera(const Version& abcVersion,
                 prop.get(sample, ISampleSelector(sampleFrame));
                 distortionParams.assign(sample->get(), sample->get() + sample->size());
             }
+            if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_distortionLocked"))
+            {
+                lockDistortion = getAbcProp<Alembic::Abc::IBoolProperty>(userProps, *propHeader, "mvg_distortionLocked", sampleFrame);
+            }
             if (userProps.getPropertyHeader("mvg_undistortionParams"))
             {
                 // Undistortion parameters
@@ -579,6 +618,18 @@ bool readCamera(const Version& abcVersion,
                 {
                     undistortionOffset(1) = getAbcProp<Alembic::Abc::IDoubleProperty>(userProps, *propHeader, "mvg_undistortionOffsetY", sampleFrame);
                 }
+                if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_undistortionDiagonal"))
+                {
+                    undistortionDiagonal = getAbcProp<Alembic::Abc::IDoubleProperty>(userProps, *propHeader, "mvg_undistortionDiagonal", sampleFrame);
+                }
+                if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_undistortionPixelAspectRatio"))
+                {
+                    undistortionPixelAspectRatio = getAbcProp<Alembic::Abc::IDoubleProperty>(userProps, *propHeader, "mvg_undistortionPixelAspectRatio", sampleFrame);
+                }
+                if (const Alembic::Abc::PropertyHeader* propHeader = userProps.getPropertyHeader("mvg_undistortionDesqueezed"))
+                {
+                    undistortionDesqueezed = getAbcProp<Alembic::Abc::IBoolProperty>(userProps, *propHeader, "mvg_undistortionPixelAspectRatio", sampleFrame);
+                }
             }
         }
     }
@@ -593,13 +644,30 @@ bool readCamera(const Version& abcVersion,
         // const float mm2pix = sensorSize_pix.at(0) / sensorWidth_mm;
         // imgWidth = haperture_cm * 10.0 * mm2pix;
         // imgHeight = vaperture_cm * 10.0 * mm2pix;
+        
+        camera::EINTRINSIC intrinsicType;
+        camera::EDISTORTION distortionType;
+        camera::EUNDISTORTION undistortionType;
+        if (abcVersion < Version(1, 2, 8))
+        {
+            compatibilityStringToEnums(mvg_intrinsicType, intrinsicType, distortionType, undistortionType);
+        }
+        else 
+        {
+            intrinsicType = EINTRINSIC_stringToEnum(mvg_intrinsicType);
+            distortionType = EDISTORTION_stringToEnum(mvg_distortionType);
+            undistortionType = EUNDISTORTION_stringToEnum(mvg_undistortionType);
+        }
 
         // create intrinsic parameters object
         std::shared_ptr<camera::IntrinsicBase> intrinsic = createIntrinsic(
-          /*intrinsic type*/ EINTRINSIC_stringToEnum(mvg_intrinsicType),
+          /*intrinsic type*/ intrinsicType,
+          /*distortion type*/ distortionType,
+          /*undistortion type*/ undistortionType,
           /*width*/ sensorSize_pix.at(0),
           /*height*/ sensorSize_pix.at(1));
 
+        intrinsic->setSerialNumber(serialNumber);
         intrinsic->setSensorWidth(sensorSize_mm.at(0));
         intrinsic->setSensorHeight(sensorSize_mm.at(1));
         intrinsic->importFromParams(mvg_intrinsicParams, abcVersion);
@@ -610,14 +678,26 @@ bool readCamera(const Version& abcVersion,
         if (intrinsicCasted)
         {
             // fy_pix = fx_pix * fy/fx
-            initialFocalLengthPix(1) =
-              (initialFocalLengthPix(0) > 0) ? initialFocalLengthPix(0) * mvg_intrinsicParams[1] / mvg_intrinsicParams[0] : -1;
+            initialFocalLengthPix(1) = initialFocalLengthPix(0);
+            if (initialFocalLengthPix(0) > 0.0)
+            {
+                initialFocalLengthPix(0) = initialFocalLengthPix(0) / intrinsicCasted->getPixelAspectRatio();
+            }
+
             intrinsicCasted->setInitialScale(initialFocalLengthPix);
             intrinsicCasted->setRatioLocked(lockRatio);
+            intrinsicCasted->setOffsetLocked(lockOffset);
+            intrinsicCasted->setScaleLocked(lockScale);
+
             std::shared_ptr<camera::Distortion> distortion = intrinsicCasted->getDistortion();
             if (distortion)
             {
-                distortion->setParameters(distortionParams);
+                distortion->setParameters(distortionParams);    
+
+                if (abcVersion >= Version(1, 2, 10))
+                {
+                    distortion->setLocked(lockDistortion);
+                }
             }
 
             std::shared_ptr<camera::Undistortion> undistortion = intrinsicCasted->getUndistortion();
@@ -625,6 +705,18 @@ bool readCamera(const Version& abcVersion,
             {
                 undistortion->setParameters(undistortionParams);
                 undistortion->setOffset(undistortionOffset);
+
+                if (abcVersion >= Version(1, 2, 7))
+                {
+                    undistortion->setDiagonal(undistortionDiagonal);
+                }
+
+                if (abcVersion >= Version(1, 2, 9))
+                {
+                    undistortion->setPixelAspectRatio(undistortionPixelAspectRatio);
+                    undistortion->setDesqueezed(undistortionDesqueezed);
+                }
+
                 // If undistortion exists, distortion does not
                 intrinsicCasted->setDistortionObject(nullptr);
             }
@@ -639,9 +731,13 @@ bool readCamera(const Version& abcVersion,
         }
 
         if (intrinsicLocked)
+        {
             intrinsic->lock();
+        }
         else
+        {
             intrinsic->unlock();
+        }
 
         sfmData.getIntrinsics().emplace(intrinsicId, intrinsic);
     }
@@ -714,7 +810,9 @@ bool readCamera(const Version& abcVersion,
         }
         else
         {
-            sfmData.setPose(*view, sfmData::CameraPose(pose, poseLocked));
+            sfmData::CameraPose cp(pose, poseLocked);
+            cp.setRotationOnly(rotationOnly);
+            sfmData.setPose(*view, cp);
         }
     }
 
@@ -974,6 +1072,12 @@ void AlembicImporter::populateSfM(sfmData::SfMData& sfmdata, ESfMData flagsPart)
     }
 
     Version abcVersion(vecAbcVersion[0], vecAbcVersion[1], vecAbcVersion[2]);
+
+    const Vec3i currentVersion = {ALICEVISION_SFMDATAIO_VERSION_MAJOR, ALICEVISION_SFMDATAIO_VERSION_MINOR, ALICEVISION_SFMDATAIO_VERSION_REVISION};
+    if (Version(currentVersion) < abcVersion)
+    {
+        ALICEVISION_THROW_ERROR("File has a version more recent than this library");
+    }
 
     if (userProps.getPropertyHeader("mvg_featuresFolders"))
     {

@@ -16,6 +16,7 @@
 #include <aliceVision/feature/imageDescriberCommon.hpp>
 
 #include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 
 #include <aliceVision/sfm/pipeline/relativePoses.hpp>
 #include <aliceVision/sfmData/SfMData.hpp>
@@ -23,277 +24,81 @@
 
 #include <aliceVision/track/tracksUtils.hpp>
 #include <aliceVision/track/trackIO.hpp>
+#include <aliceVision/track/TracksHandler.hpp>
 
-#include <aliceVision/multiview/triangulation/triangulationDLT.hpp>
+#include <aliceVision/mesh/MeshIntersection.hpp>
 
+#include <aliceVision/dataio/json.hpp>
+#include <aliceVision/sfm/pipeline/bootstrapping/PairsScoring.hpp>
+#include <aliceVision/sfm/pipeline/bootstrapping/Bootstrap.hpp>
 #include <cstdlib>
-#include <filesystem>
 #include <random>
 #include <regex>
+#include <fstream>
 
 // These constants define the current software version.
 // They must be updated when the command line is changed.
-#define ALICEVISION_SOFTWARE_VERSION_MAJOR 1
+#define ALICEVISION_SOFTWARE_VERSION_MAJOR 3
 #define ALICEVISION_SOFTWARE_VERSION_MINOR 0
 
 using namespace aliceVision;
 
 namespace po = boost::program_options;
-namespace fs = std::filesystem;
+namespace fs = boost::filesystem;
 
-std::vector<boost::json::value> readJsons(std::istream& is, boost::json::error_code& ec)
+/**
+ * @brief build an initial set of landmarks from a view and a mesh object
+ * @param sfmData the input/output sfmData
+ * @param meshFilename the mesh path
+ * @param referenceViewId the reference view id
+ * @param tracksMap the input map of tracks
+ * @return true
+*/
+bool landmarksFromMesh(
+                        sfmData::Landmarks & landmarks,
+                        const sfmData::SfMData & sfmData, 
+                        const std::string & meshFilename,
+                        const IndexT referenceViewId,
+                        const track::TracksHandler& tracksHandler)
 {
-    std::vector<boost::json::value> jvs;
-    boost::json::stream_parser p;
-    std::string line;
-    std::size_t n = 0;
-
-    while (true)
+    //Load mesh in the mesh intersection object
+    ALICEVISION_LOG_INFO("Loading mesh");
+    mesh::MeshIntersection mi;
+    if (!mi.initialize(meshFilename))
     {
-        if (n == line.size())
-        {
-            if (!std::getline(is, line))
-            {
-                break;
-            }
-
-            n = 0;
-        }
-
-        // Consume at least part of the line
-        n += p.write_some(line.data() + n, line.size() - n, ec);
-
-        // If the parser found a value, add it
-        if (p.done())
-        {
-            jvs.push_back(p.release());
-            p.reset();
-        }
+        return EXIT_FAILURE;
     }
 
-    if (!p.done())
+    const sfmData::View & v = sfmData.getView(referenceViewId);
+    const sfmData::CameraPose & cpose = sfmData.getAbsolutePose(v.getPoseId());
+    const camera::IntrinsicBase & intrinsic = sfmData.getIntrinsic(v.getIntrinsicId());
+
+    mi.setPose(cpose.getTransform());
+
+    const auto & trackIds = tracksHandler.getTracksPerView().at(referenceViewId);
+    const auto & tracksMap = tracksHandler.getAllTracks();
+
+    for (const auto trackId : trackIds)
     {
-        // Try to extract the end
-        p.finish(ec);
-        if (ec.failed())
-        {
-            return jvs;
-        }
+        const track::Track & track = tracksMap.at(trackId);
+        const track::TrackItem & refItem = track.featPerView.at(referenceViewId);
+        
+        const Vec2 refpt = track.featPerView.at(referenceViewId).coords;
+        const std::size_t featureId = track.featPerView.at(referenceViewId).featureId;
+        const double scale = track.featPerView.at(referenceViewId).scale;
 
-        jvs.push_back(p.release());
-    }
-
-    return jvs;
-}
-
-bool estimatePairAngle(const sfmData::SfMData& sfmData,
-                       const sfm::ReconstructedPair& pair,
-                       const track::TracksMap& tracksMap,
-                       const track::TracksPerView& tracksPerView,
-                       const feature::FeaturesPerView& featuresPerView,
-                       const double maxDistance,
-                       double& resultAngle,
-                       std::vector<IndexT>& usedTracks)
-{
-    usedTracks.clear();
-
-    const sfmData::View& refView = sfmData.getView(pair.reference);
-    const sfmData::View& nextView = sfmData.getView(pair.next);
-
-    std::shared_ptr<camera::IntrinsicBase> refIntrinsics = sfmData.getIntrinsicSharedPtr(refView.getIntrinsicId());
-    std::shared_ptr<camera::IntrinsicBase> nextIntrinsics = sfmData.getIntrinsicSharedPtr(nextView.getIntrinsicId());
-    std::shared_ptr<camera::Pinhole> refPinhole = std::dynamic_pointer_cast<camera::Pinhole>(refIntrinsics);
-    std::shared_ptr<camera::Pinhole> nextPinhole = std::dynamic_pointer_cast<camera::Pinhole>(nextIntrinsics);
-
-    if (refPinhole == nullptr || nextPinhole == nullptr)
-    {
-        return false;
-    }
-
-    aliceVision::track::TracksMap mapTracksCommon;
-    track::getCommonTracksInImagesFast({pair.reference, pair.next}, tracksMap, tracksPerView, mapTracksCommon);
-
-    const feature::MapFeaturesPerDesc& refFeaturesPerDesc = featuresPerView.getFeaturesPerDesc(pair.reference);
-    const feature::MapFeaturesPerDesc& nextFeaturesPerDesc = featuresPerView.getFeaturesPerDesc(pair.next);
-
-    const Eigen::Matrix3d Kref = refPinhole->K();
-    const Eigen::Matrix3d Knext = nextPinhole->K();
-
-    Eigen::Matrix3d F = Knext.inverse().transpose() * CrossProductMatrix(pair.t) * pair.R * Kref.inverse();
-
-    Eigen::Vector3d c = -pair.R.transpose() * pair.t;
-
-    Mat34 P1, P2;
-    P_from_KRt(Kref, Mat3::Identity(), Vec3::Zero(), P1);
-    P_from_KRt(Knext, pair.R, pair.t, P2);
-
-    size_t count = 0;
-    std::vector<double> angles;
-    for (const auto& commonItem : mapTracksCommon)
-    {
-        const track::Track& track = commonItem.second;
-        const feature::PointFeatures& refFeatures = refFeaturesPerDesc.at(track.descType);
-        const feature::PointFeatures& nextfeatures = nextFeaturesPerDesc.at(track.descType);
-        const IndexT refFeatureId = track.featPerView.at(pair.reference).featureId;
-        const IndexT nextfeatureId = track.featPerView.at(pair.next).featureId;
-        const Vec2 refpt = refFeatures[refFeatureId].coords().cast<double>();
-        const Vec2 nextpt = nextfeatures[nextfeatureId].coords().cast<double>();
-
-        const Vec2 refptu = refIntrinsics->get_ud_pixel(refpt);
-        const Vec2 nextptu = nextIntrinsics->get_ud_pixel(nextpt);
-
-        Vec3 line = F * refptu.homogeneous();
-
-        // Make sure line normal is normalized
-        line = line * (1.0 / line.head<2>().norm());
-        double distance = nextptu.homogeneous().dot(line);
-        if (distance > maxDistance)
+        Vec3 point;
+        if (!mi.pickPoint(point, intrinsic, refpt))
         {
             continue;
         }
 
-        Vec3 X;
-        multiview::TriangulateDLT(P1, refptu, P2, nextptu, X);
-
-        if (X(2) < 0.0)
-        {
-            continue;
-        }
-
-        const Vec3 ray1 = -X;
-        const Vec3 ray2 = c - X;
-        const double cangle = clamp(ray1.normalized().dot(ray2.normalized()), -1.0, 1.0);
-        const double angle = std::acos(cangle);
-        angles.push_back(angle);
-
-        usedTracks.push_back(commonItem.first);
-    }
-
-    const unsigned medianIndex = angles.size() / 2;
-    std::nth_element(angles.begin(), angles.begin() + medianIndex, angles.end());
-    resultAngle = angles[medianIndex];
-
-    return true;
-}
-
-double computeScore(const feature::FeaturesPerView& featuresPerView,
-                    const track::TracksMap& tracksMap,
-                    const std::vector<IndexT>& usedTracks,
-                    const IndexT viewId,
-                    const size_t maxLevel)
-{
-    const feature::MapFeaturesPerDesc& featuresPerDesc = featuresPerView.getFeaturesPerDesc(viewId);
-
-    std::vector<std::set<std::pair<unsigned int, unsigned int>>> uniques(maxLevel - 1);
-
-    for (auto trackId : usedTracks)
-    {
-        auto& track = tracksMap.at(trackId);
-
-        const feature::PointFeatures& features = featuresPerDesc.at(track.descType);
-
-        const IndexT featureId = track.featPerView.at(viewId).featureId;
-        const Vec2 pt = features[featureId].coords().cast<double>();
-
-        unsigned int ptx = (unsigned int)(pt.x());
-        unsigned int pty = (unsigned int)(pt.y());
-
-        for (unsigned int shift = 1; shift < maxLevel; shift++)
-        {
-            unsigned int lptx = ptx >> shift;
-            unsigned int lpty = pty >> shift;
-
-            uniques[shift - 1].insert(std::make_pair(lptx, lpty));
-        }
-    }
-
-    double sum = 0.0;
-    for (unsigned int shift = 1; shift < maxLevel; shift++)
-    {
-        int size = uniques[shift - 1].size();
-        if (size <= 1)
-        {
-            continue;
-        }
-
-        double w = pow(2.0, maxLevel - shift);
-        sum += w * double(size);
-    }
-
-    return sum;
-}
-
-bool buildSfmData(sfmData::SfMData& sfmData,
-                  const sfm::ReconstructedPair& pair,
-                  const track::TracksMap& tracksMap,
-                  const feature::FeaturesPerView& featuresPerView,
-                  const std::vector<IndexT>& usedTracks)
-{
-    const sfmData::View& refView = sfmData.getView(pair.reference);
-    const sfmData::View& nextView = sfmData.getView(pair.next);
-
-    std::shared_ptr<camera::IntrinsicBase> refIntrinsics = sfmData.getIntrinsicSharedPtr(refView.getIntrinsicId());
-    std::shared_ptr<camera::IntrinsicBase> nextIntrinsics = sfmData.getIntrinsicSharedPtr(nextView.getIntrinsicId());
-    std::shared_ptr<camera::Pinhole> refPinhole = std::dynamic_pointer_cast<camera::Pinhole>(refIntrinsics);
-    std::shared_ptr<camera::Pinhole> nextPinhole = std::dynamic_pointer_cast<camera::Pinhole>(nextIntrinsics);
-
-    if (refPinhole == nullptr || nextPinhole == nullptr)
-    {
-        return false;
-    }
-
-    const feature::MapFeaturesPerDesc& refFeaturesPerDesc = featuresPerView.getFeaturesPerDesc(pair.reference);
-    const feature::MapFeaturesPerDesc& nextFeaturesPerDesc = featuresPerView.getFeaturesPerDesc(pair.next);
-
-    const Eigen::Matrix3d Kref = refPinhole->K();
-    const Eigen::Matrix3d Knext = nextPinhole->K();
-
-    Mat34 P1, P2;
-    P_from_KRt(Kref, Mat3::Identity(), Vec3::Zero(), P1);
-    P_from_KRt(Knext, pair.R, pair.t, P2);
-
-    size_t count = 0;
-    std::vector<double> angles;
-    for (const auto& trackId : usedTracks)
-    {
-        const track::Track& track = tracksMap.at(trackId);
-
-        const feature::PointFeatures& refFeatures = refFeaturesPerDesc.at(track.descType);
-        const feature::PointFeatures& nextFeatures = nextFeaturesPerDesc.at(track.descType);
-        const IndexT refFeatureId = track.featPerView.at(pair.reference).featureId;
-        const IndexT nextFeatureId = track.featPerView.at(pair.next).featureId;
-        const Vec2 refpt = refFeatures[refFeatureId].coords().cast<double>();
-        const Vec2 nextpt = nextFeatures[nextFeatureId].coords().cast<double>();
-
-        const Vec2 refptu = refIntrinsics->get_ud_pixel(refpt);
-        const Vec2 nextptu = nextIntrinsics->get_ud_pixel(nextpt);
-
-        Vec3 X;
-        multiview::TriangulateDLT(P1, refptu, P2, nextptu, X);
-
-        if (X(2) < 0.0)
-        {
-            continue;
-        }
-
-        sfmData::Landmark landmark;
-        landmark.descType = track.descType;
-        landmark.X = X;
-
-        sfmData::Observation refObs;
-        refObs.setFeatureId(refFeatureId);
-        refObs.setScale(refFeatures[refFeatureId].scale());
-        refObs.setCoordinates(refpt);
-
-        sfmData::Observation nextObs;
-        nextObs.setFeatureId(nextFeatureId);
-        nextObs.setScale(nextFeatures[nextFeatureId].scale());
-        nextObs.setCoordinates(nextpt);
-
-        landmark.getObservations()[pair.reference] = refObs;
-        landmark.getObservations()[pair.next] = nextObs;
-
-        sfmData.getLandmarks()[trackId] = landmark;
+        sfmData::Landmark l;
+        l.X = point;
+        l.descType = feature::EImageDescriberType::SIFT;
+        sfmData::Observations & observations = l.getObservations();
+        observations[referenceViewId] = sfmData::Observation(refpt, featureId, scale);
+        landmarks[trackId] = l;
     }
 
     return true;
@@ -304,40 +109,39 @@ int aliceVision_main(int argc, char** argv)
     // command-line parameters
     std::string sfmDataFilename;
     std::string sfmDataOutputFilename;
-    std::vector<std::string> featuresFolders;
     std::string tracksFilename;
+    std::string meshFilename;
     std::string pairsDirectory;
 
     // user optional parameters
-    std::string describerTypesName = feature::EImageDescriberType_enumToString(feature::EImageDescriberType::SIFT);
-    std::pair<std::string, std::string> initialPairString("", "");
-
     const double maxEpipolarDistance = 4.0;
-    const double minAngle = 5.0;
+    double minAngle = 5.0;
+    double maxAngle = 40.0;
+    std::pair<std::string, std::string> initialPairString("", "");
+    std::pair<IndexT, IndexT> initialPair(UndefinedIndexT, UndefinedIndexT);
 
     int randomSeed = std::mt19937::default_seed;
 
-    // clang-format off
     po::options_description requiredParams("Required parameters");
     requiredParams.add_options()
-        ("input,i", po::value<std::string>(&sfmDataFilename)->required(),
-         "SfMData file.")
-        ("output,o", po::value<std::string>(&sfmDataOutputFilename)->required(),
-         "SfMData output file.")
-        ("tracksFilename,t", po::value<std::string>(&tracksFilename)->required(),
-         "Tracks file.")
-        ("pairs,p", po::value<std::string>(&pairsDirectory)->required(),
-         "Path to the pairs directory.")
-        ("featuresFolders,f", po::value<std::vector<std::string>>(&featuresFolders)->multitoken(),
-         "Path to folder(s) containing the extracted features.")
-        ("describerTypes,d", po::value<std::string>(&describerTypesName)->default_value(describerTypesName),
-         feature::EImageDescriberType_informations().c_str());
-    // clang-format on
+    ("input,i", po::value<std::string>(&sfmDataFilename)->required(), "SfMData file.")
+    ("output,o", po::value<std::string>(&sfmDataOutputFilename)->required(), "SfMData output file.")
+    ("tracksFilename,t", po::value<std::string>(&tracksFilename)->required(), "Tracks file.")
+    ("pairs,p", po::value<std::string>(&pairsDirectory)->required(), "Path to the pairs directory.");
+
+    po::options_description optionalParams("Required parameters");
+    optionalParams.add_options()
+    ("minAngleInitialPair", po::value<double>(&minAngle)->default_value(minAngle), "Minimum angle for the initial pair.")
+    ("maxAngleInitialPair", po::value<double>(&maxAngle)->default_value(maxAngle), "Maximum angle for the initial pair.")
+    ("meshFilename,t", po::value<std::string>(&meshFilename)->required(), "Mesh object file.")
+    ("initialPairA", po::value<std::string>(&initialPairString.first)->default_value(initialPairString.first), "UID or filepath or filename of the first image.")
+    ("initialPairB", po::value<std::string>(&initialPairString.second)->default_value(initialPairString.second), "UID or filepath or filename of the second image.");
 
     CmdLine cmdline("AliceVision SfM Bootstraping");
 
     cmdline.add(requiredParams);
-    if (!cmdline.execute(argc, argv))
+    cmdline.add(optionalParams);
+    if(!cmdline.execute(argc, argv))
     {
         return EXIT_FAILURE;
     }
@@ -345,14 +149,15 @@ int aliceVision_main(int argc, char** argv)
     // set maxThreads
     HardwareContext hwc = cmdline.getHardwareContext();
     omp_set_num_threads(hwc.getMaxThreads());
-
+    
     // load input SfMData scene
     sfmData::SfMData sfmData;
-    if (!sfmDataIO::load(sfmData, sfmDataFilename, sfmDataIO::ESfMData::ALL))
+    if(!sfmDataIO::load(sfmData, sfmDataFilename, sfmDataIO::ESfMData::ALL))
     {
         ALICEVISION_LOG_ERROR("The input SfMData file '" + sfmDataFilename + "' cannot be read.");
         return EXIT_FAILURE;
     }
+
 
     if (sfmData.getValidViews().size() >= 2)
     {
@@ -360,101 +165,162 @@ int aliceVision_main(int argc, char** argv)
         return EXIT_SUCCESS;
     }
 
-    // get imageDescriber type
-    const std::vector<feature::EImageDescriberType> describerTypes = feature::EImageDescriberType_stringToEnums(describerTypesName);
-
-    // features reading
-    feature::FeaturesPerView featuresPerView;
-    ALICEVISION_LOG_INFO("Load features");
-    if (!sfm::loadFeaturesPerView(featuresPerView, sfmData, featuresFolders, describerTypes))
+    if (sfmData.getValidViews().size() == 1)
     {
-        ALICEVISION_LOG_ERROR("Invalid features.");
-        return EXIT_FAILURE;
+        ALICEVISION_LOG_INFO("SfmData has one view with a pose. Assuming we want to use it.");
+        initialPairString.first = std::to_string(*sfmData.getValidViews().begin());
+    }
+
+
+    if (!initialPairString.first.empty() || !initialPairString.second.empty())
+    {
+        if (initialPairString.first == initialPairString.second)
+        {
+            ALICEVISION_LOG_ERROR("Invalid image names. You cannot use the same image to initialize a pair.");
+            return EXIT_FAILURE;
+        }
+
+        if (!initialPairString.first.empty())
+        {
+            initialPair.first = sfmData.findView(initialPairString.first);
+            if (initialPair.first == UndefinedIndexT)
+            {
+                ALICEVISION_LOG_ERROR("Could not find corresponding view in the initial pair: " + initialPairString.first);
+                return EXIT_FAILURE;
+            }
+        }
+
+        if (!initialPairString.second.empty())
+        {
+            initialPair.second = sfmData.findView(initialPairString.second);
+            if (initialPair.second == UndefinedIndexT)
+            {
+                ALICEVISION_LOG_ERROR("Could not find corresponding view in the initial pair: " + initialPairString.second);
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+    if (initialPair.first != UndefinedIndexT)
+    {
+        ALICEVISION_LOG_INFO("Force one of the selected view to be " << initialPair.first);
+    }
+
+    if (initialPair.second != UndefinedIndexT)
+    {
+        ALICEVISION_LOG_INFO("Force one of the selected view to be " << initialPair.second);
     }
 
     // Load tracks
     ALICEVISION_LOG_INFO("Load tracks");
-    std::ifstream tracksFile(tracksFilename);
-    if (tracksFile.is_open() == false)
+    track::TracksHandler tracksHandler;
+    if (!tracksHandler.load(tracksFilename, sfmData.getViewsKeys()))
     {
         ALICEVISION_LOG_ERROR("The input tracks file '" + tracksFilename + "' cannot be read.");
         return EXIT_FAILURE;
     }
-    std::stringstream buffer;
-    buffer << tracksFile.rdbuf();
-    boost::json::value jv = boost::json::parse(buffer.str());
-    track::TracksMap mapTracks(track::flat_map_value_to<track::Track>(jv));
 
-    // Compute tracks per view
-    ALICEVISION_LOG_INFO("Estimate tracks per view");
-    track::TracksPerView mapTracksPerView;
-    for (const auto& viewIt : sfmData.getViews())
-    {
-        // create an entry in the map
-        mapTracksPerView[viewIt.first];
+
+    //Load mesh in the mesh intersection object
+    bool useMesh = false;
+    sfmData::Landmarks landmarks;
+    if (!meshFilename.empty() && initialPair.first != UndefinedIndexT)
+    {        
+        landmarksFromMesh(landmarks, sfmData, meshFilename, initialPair.first, tracksHandler);
+
+        useMesh = true;
     }
-    track::computeTracksPerView(mapTracks, mapTracksPerView);
 
-    // Result of pair estimations are stored in multiple files
+    //Result of pair estimations are stored in multiple files
     std::vector<sfm::ReconstructedPair> reconstructedPairs;
     const std::regex regex("pairs\\_[0-9]+\\.json");
-    for (auto const& file : fs::directory_iterator{pairsDirectory})
+    for(fs::directory_entry & file : boost::make_iterator_range(fs::directory_iterator(pairsDirectory), {}))
     {
         if (!std::regex_search(file.path().string(), regex))
         {
             continue;
         }
 
-        std::ifstream inputfile(file.path().string());
+        std::ifstream inputfile(file.path().string());        
 
         boost::json::error_code ec;
         std::vector<boost::json::value> values = readJsons(inputfile, ec);
-        for (const boost::json::value& value : values)
+        for (const boost::json::value & value : values)
         {
             std::vector<sfm::ReconstructedPair> localVector = boost::json::value_to<std::vector<sfm::ReconstructedPair>>(value);
-            reconstructedPairs.insert(reconstructedPairs.end(), localVector.begin(), localVector.end());
+          
+            for (const auto & pair: localVector)
+            {
+                // Filter out pairs given user filters
+                if (initialPair.first != UndefinedIndexT)
+                {
+                    if (pair.reference != initialPair.first && pair.next != initialPair.first)
+                    {
+                        continue;
+                    }
+                }
+
+                // Filter out pairs given user filters
+                if (initialPair.second != UndefinedIndexT)
+                {
+                    if (pair.reference != initialPair.second && pair.next != initialPair.second)
+                    {
+                        continue;
+                    }
+                }
+
+                reconstructedPairs.push_back(pair);
+            }
         }
     }
 
-    // Check all pairs
+    //Check all pairs
     ALICEVISION_LOG_INFO("Give a score to all pairs");
     int count = 0;
 
-    double bestScore = 0.0;
+    double bestScore = std::numeric_limits<double>::lowest();
     sfm::ReconstructedPair bestPair;
-    std::vector<IndexT> bestUsedTracks;
+    bestPair.reference = UndefinedIndexT;
+    std::vector<std::size_t> bestUsedTracks;
 
-    for (const sfm::ReconstructedPair& pair : reconstructedPairs)
+    IndexT bestPairId = findBestPair(sfmData, reconstructedPairs,  
+                            tracksHandler.getAllTracks(), tracksHandler.getTracksPerView(), 
+                            minAngle, maxAngle);
+
+    if (bestPairId == UndefinedIndexT)
     {
-        std::vector<IndexT> usedTracks;
-        double angle = 0.0;
-        if (!estimatePairAngle(sfmData, pair, mapTracks, mapTracksPerView, featuresPerView, maxEpipolarDistance, angle, usedTracks))
-        {
-            continue;
-        }
-
-        if (radianToDegree(angle) < minAngle)
-        {
-            continue;
-        }
-
-        double refScore = computeScore(featuresPerView, mapTracks, usedTracks, pair.reference, 16);
-        double nextScore = computeScore(featuresPerView, mapTracks, usedTracks, pair.next, 16);
-
-        double score = std::min(refScore, nextScore) * radianToDegree(angle);
-
-        if (score > bestScore)
-        {
-            bestPair = pair;
-            bestScore = score;
-            bestUsedTracks = usedTracks;
-        }
-    }
-
-    if (!buildSfmData(sfmData, bestPair, mapTracks, featuresPerView, bestUsedTracks))
-    {
+        ALICEVISION_LOG_INFO("No valid pair");
         return EXIT_FAILURE;
     }
+    
+    bestPair = reconstructedPairs[bestPairId];
+
+    if (useMesh)
+    {
+        if (!sfm::bootstrapMesh(sfmData, 
+                        landmarks,
+                        bestPair.reference, bestPair.next, 
+                        tracksHandler.getAllTracks(), tracksHandler.getTracksPerView()))
+        {
+            return EXIT_FAILURE;
+        }
+    }
+    else 
+    {
+        if (!sfm::bootstrapBase(sfmData, 
+                        bestPair.reference, bestPair.next, 
+                        bestPair.pose, 
+                        tracksHandler.getAllTracks(), tracksHandler.getTracksPerView()))
+        {
+            return EXIT_FAILURE;
+        }
+    }
+
+    std::cout << sfmData.getLandmarks().size() << std::endl;
+
+    ALICEVISION_LOG_INFO("Best selected pair is : ");
+    ALICEVISION_LOG_INFO(" - " << sfmData.getView(bestPair.reference).getImage().getImagePath());
+    ALICEVISION_LOG_INFO(" - " << sfmData.getView(bestPair.next).getImage().getImagePath());
 
     sfmDataIO::save(sfmData, sfmDataOutputFilename, sfmDataIO::ESfMData::ALL);
 

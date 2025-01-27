@@ -34,24 +34,40 @@ function(alicevision_add_library library_name)
 
   if(NOT LIBRARY_USE_CUDA)
     add_library(${library_name} ${LIBRARY_SOURCES})
+    
+    if(ALICEVISION_BUILD_COVERAGE AND CMAKE_COMPILER_IS_GNUCXX)
+        append_coverage_compiler_flags_to_target(${library_name})
+    endif()
+
   elseif(BUILD_SHARED_LIBS)
     cuda_add_library(${library_name} SHARED ${LIBRARY_SOURCES} OPTIONS --compiler-options "-fPIC")
   else()
     cuda_add_library(${library_name} ${LIBRARY_SOURCES})
   endif()
 
+  
+  if (ALICEVISION_REMOVE_ABSOLUTE)
+    foreach (item ${LIBRARY_PUBLIC_LINKS})
+        get_filename_component(nameItem ${item} NAME)
+        list(APPEND TRANSFORMED_LIBRARY_PUBLIC_LINKS ${nameItem})
+    endforeach()
+  else()
+    set(TRANSFORMED_LIBRARY_PUBLIC_LINKS ${LIBRARY_PUBLIC_LINKS})
+  endif()
+
   # FindCUDA.cmake implicit	target_link_libraries() can not be mixed with new signature (CMake < 3.9.0)
   if(NOT LIBRARY_USE_CUDA)
     target_link_libraries(${library_name}
-      PUBLIC ${LIBRARY_PUBLIC_LINKS}
+      PUBLIC ${TRANSFORMED_LIBRARY_PUBLIC_LINKS}
       PRIVATE ${LIBRARY_PRIVATE_LINKS}
     )
   else()
     target_link_libraries(${library_name}
-       ${LIBRARY_PUBLIC_LINKS}
+       ${TRANSFORMED_LIBRARY_PUBLIC_LINKS}
        ${LIBRARY_PRIVATE_LINKS}
     )
   endif()
+
 
   target_include_directories(${library_name}
     PUBLIC $<BUILD_INTERFACE:${ALICEVISION_INCLUDE_DIR}>
@@ -172,6 +188,10 @@ function(alicevision_add_software software_name)
     OUTPUT_NAME ${software_name}
     )
 
+    if(ALICEVISION_BUILD_COVERAGE AND CMAKE_COMPILER_IS_GNUCXX)
+        append_coverage_compiler_flags_to_target(${software_name}_exe)
+    endif()
+
   target_link_libraries(${software_name}_exe
     PUBLIC ${SOFTWARE_LINKS}
   )
@@ -238,12 +258,14 @@ function(alicevision_add_test test_file)
            WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
            COMMAND $<TARGET_FILE:${TEST_EXECUTABLE_NAME}> --catch_system_error=yes --log_level=all
   )
+   
+  if(ALICEVISION_BUILD_COVERAGE AND CMAKE_COMPILER_IS_GNUCXX)
+    append_coverage_compiler_flags_to_target(${TEST_EXECUTABLE_NAME})
+  endif()
 
   if(UNIX)
     # setup LD_LIBRARY_PATH for running tests
     get_property(TEST_LINK_DIRS TARGET ${TEST_EXECUTABLE_NAME} PROPERTY LINK_DIRECTORIES)
-
-    set_property(TEST test_${TEST_EXECUTABLE_NAME} PROPERTY ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}:${TEST_LINK_DIRS}:$ENV{LD_LIBRARY_PATH}")
   endif()
   
   if (WIN32)

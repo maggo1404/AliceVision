@@ -29,6 +29,8 @@
 #include "ceres/ceres.h"
 #include "ceres/rotation.h"
 
+#include <aliceVision/numeric/BoxStats.hpp>
+
 #include <map>
 #include <queue>
 #include <stdint.h>

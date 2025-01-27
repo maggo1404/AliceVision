@@ -8,6 +8,9 @@
 #include "regionsIO.hpp"
 
 #include <aliceVision/system/ProgressDisplay.hpp>
+#include <aliceVision/utils/filesIO.hpp>
+
+#include <boost/algorithm/string/join.hpp>
 
 #include <atomic>
 #include <cassert>
@@ -35,7 +38,7 @@ std::unique_ptr<feature::Regions> loadRegions(const std::vector<std::string>& fo
         const fs::path featPath = fs::path(folder) / std::string(basename + "." + imageDescriberTypeName + ".feat");
         const fs::path descPath = fs::path(folder) / std::string(basename + "." + imageDescriberTypeName + ".desc");
 
-        if (fs::exists(featPath) && fs::exists(descPath))
+        if (utils::exists(featPath) && utils::exists(descPath))
         {
             featFilename = featPath.string();
             descFilename = descPath.string();
@@ -43,7 +46,10 @@ std::unique_ptr<feature::Regions> loadRegions(const std::vector<std::string>& fo
     }
 
     if (featFilename.empty() || descFilename.empty())
-        throw std::runtime_error("Can't find view " + basename + " region files");
+    {
+        const std::string foldersStr = boost::algorithm::join(folders, ", ");
+        throw std::runtime_error("Can't find view " + basename + " region files in folders " + foldersStr);
+    }
 
     ALICEVISION_LOG_TRACE("Features filename: " << featFilename);
     ALICEVISION_LOG_TRACE("Descriptors filename: " << descFilename);
@@ -64,7 +70,7 @@ std::unique_ptr<feature::Regions> loadRegions(const std::vector<std::string>& fo
         ss << "\t  " << e.what() << "\n";
         ALICEVISION_LOG_ERROR(ss.str());
 
-        throw std::runtime_error(e.what());
+        throw;
     }
 
     ALICEVISION_LOG_TRACE("Region count: " << regionsPtr->RegionCount());
@@ -84,7 +90,7 @@ std::unique_ptr<feature::Regions> loadFeatures(const std::vector<std::string>& f
     std::set<std::string> foldersSet;
     for (const auto& folder : folders)
     {
-        if (fs::exists(folder))
+        if (utils::exists(folder))
         {
             foldersSet.insert(fs::canonical(folder).string());
         }
@@ -93,12 +99,16 @@ std::unique_ptr<feature::Regions> loadFeatures(const std::vector<std::string>& f
     for (const auto& folder : foldersSet)
     {
         const fs::path featPath = fs::path(folder) / std::string(basename + "." + imageDescriberTypeName + ".feat");
-        if (fs::exists(featPath))
+        if (utils::exists(featPath))
             featFilename = featPath.string();
     }
 
     if (featFilename.empty())
-        throw std::runtime_error("Can't find view " + basename + " features file");
+    {
+        const std::vector<std::string> folders(foldersSet.begin(), foldersSet.end());
+        const std::string foldersStr = boost::algorithm::join(folders, ", ");
+        throw std::runtime_error("Can't find view " + basename + " features files in folders " + foldersStr);
+    }
 
     ALICEVISION_LOG_DEBUG("Features filename: " << featFilename);
 
@@ -117,7 +127,7 @@ std::unique_ptr<feature::Regions> loadFeatures(const std::vector<std::string>& f
         ss << "\t  " << e.what() << "\n";
         ALICEVISION_LOG_ERROR(ss.str());
 
-        throw std::runtime_error(e.what());
+        throw;
     }
 
     ALICEVISION_LOG_TRACE("Feature count: " << regionsPtr->RegionCount());
@@ -169,6 +179,13 @@ bool loadFeaturesPerDescPerView(std::vector<std::vector<std::unique_ptr<feature:
             }
             catch (const std::exception& e)
             {
+                const feature::EImageDescriberType d = imageDescribers.at(descIdx)->getDescriberType();
+
+#pragma omp critical
+                {
+                    ALICEVISION_LOG_ERROR("Cannot load features for View " << viewIds.at(viewIdx) << " for describer type " << feature::EImageDescriberType_enumToString(d) << ".");
+                    ALICEVISION_LOG_ERROR(e.what());
+                }
                 loadingSuccess = false;
             }
         }
@@ -213,9 +230,13 @@ bool loadRegionsPerView(feature::RegionsPerView& regionsPerView,
                     {
                         regionsPtr = loadRegions(featuresFolders, iter->second.get()->getViewId(), *(imageDescribers.at(i)));
                     }
-                    catch (const std::exception&)
+                    catch (const std::exception& e)
                     {
                         invalid = true;
+#pragma omp critical
+                        {
+                            ALICEVISION_LOG_ERROR(e.what());
+                        }
                         continue;
                     }
 #pragma omp critical
@@ -242,7 +263,7 @@ bool loadFeaturesPerView(feature::FeaturesPerView& featuresPerView,
     for (auto it = folders.begin(); it != folders.end(); ++it)
         ALICEVISION_LOG_DEBUG("\t - " << *it);
 
-    ALICEVISION_LOG_DEBUG("List of feature folders to load:");
+    ALICEVISION_LOG_DEBUG("List of feature folders (from sfmData) to load:");
     for (auto it = featuresFolders.begin(); it != featuresFolders.end(); ++it)
         ALICEVISION_LOG_DEBUG("\t - " << *it);
 
@@ -269,9 +290,13 @@ bool loadFeaturesPerView(feature::FeaturesPerView& featuresPerView,
                 {
                     regionsPtr = loadFeatures(featuresFolders, iter->second.get()->getViewId(), *imageDescribers.at(i));
                 }
-                catch (const std::exception&)
+                catch (const std::exception& e)
                 {
                     invalid = true;
+#pragma omp critical
+                    {
+                        ALICEVISION_LOG_ERROR(e.what());
+                    }
                     continue;
                 }
 #pragma omp critical

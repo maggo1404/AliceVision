@@ -11,7 +11,7 @@
 #include <aliceVision/track/Track.hpp>
 #include <aliceVision/track/tracksUtils.hpp>
 #include <aliceVision/stl/mapUtils.hpp>
-
+#include <aliceVision/numeric/BoxStats.hpp>
 #include <aliceVision/utils/Histogram.hpp>
 
 namespace aliceVision {

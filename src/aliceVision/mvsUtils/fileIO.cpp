@@ -12,9 +12,6 @@
 #include <aliceVision/mvsUtils/common.hpp>
 #include <aliceVision/mvsUtils/MultiViewParams.hpp>
 
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
-
 namespace aliceVision {
 namespace mvsUtils {
 
@@ -338,6 +335,10 @@ std::string getFileNameFromViewId(const MultiViewParams& mp,
             suffix = "_tilePattern";
             ext = "obj";
             break;
+        }
+        case EFileType::none:
+        {
+            ALICEVISION_THROW_ERROR("FileType is None");
         }
     }
 

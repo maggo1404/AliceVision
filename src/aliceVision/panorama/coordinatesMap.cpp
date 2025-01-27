@@ -51,7 +51,7 @@ bool CoordinatesMap::build(const std::pair<int, int>& panoramaSize,
             /**
              * Project this ray to camera pixel coordinates
              */
-            const Vec2 pix_disto_d = intrinsics.project(pose, ray.homogeneous(), true);
+            const Vec2 pix_disto_d = intrinsics.transformProject(pose, ray.homogeneous(), true);
             const Vec2f pix_disto = pix_disto_d.cast<float>();
 
             /**

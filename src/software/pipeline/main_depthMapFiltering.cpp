@@ -19,7 +19,6 @@
 #include <aliceVision/depthMap/NormalMapEstimator.hpp>
 
 #include <boost/program_options.hpp>
-#include <boost/filesystem.hpp>
 
 // These constants define the current software version.
 // They must be updated when the command line is changed.
@@ -108,7 +107,7 @@ int aliceVision_main(int argc, char* argv[])
     }
 
     // initialization
-    mvsUtils::MultiViewParams mp(sfmData, "", depthMapsFolder, outputFolder, "", true);
+    mvsUtils::MultiViewParams mp(sfmData, "", depthMapsFolder, outputFolder, mvsUtils::EFileType::depthMap);
 
     mp.setMinViewAngle(minViewAngle);
     mp.setMaxViewAngle(maxViewAngle);

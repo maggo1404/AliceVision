@@ -208,7 +208,7 @@ void Rig::displayRelativePoseReprojection(const geometry::Pose3& relativePose, s
                 // Reprojections
                 const Vec3& point3D = points3D.col(iInlier);
                 // Its reprojection
-                Vec2 itsReprojection = witnessLocalizerResults[iView].getIntrinsics().project(poseWitnessCamera, point3D);
+                Vec2 itsReprojection = witnessLocalizerResults[iView].getIntrinsics().transformProject(poseWitnessCamera, point3D);
                 // Its associated observation location
                 const Vec2& point2D = points2D.col(iInlier);
 
@@ -588,7 +588,7 @@ double reprojectionError(const localization::LocalizationResult& localizationRes
         // Inlier 3D point
         const Vec3& point3D = localizationResult.getPt3D().col(iInliers);
         // Its reprojection
-        const Vec2 itsReprojection = localizationResult.getIntrinsics().project(pose, point3D.homogeneous());
+        const Vec2 itsReprojection = localizationResult.getIntrinsics().transformProject(pose, point3D.homogeneous());
         // Its associated observation location
         const Vec2& point2D = localizationResult.getPt2D().col(iInliers);
         // Residual

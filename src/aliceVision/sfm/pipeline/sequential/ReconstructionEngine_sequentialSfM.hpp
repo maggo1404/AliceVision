@@ -68,7 +68,7 @@ class ReconstructionEngine_sequentialSfM : public ReconstructionEngine
         bool filterTrackForks = true;
         robustEstimation::ERobustEstimator localizerEstimator = robustEstimation::ERobustEstimator::ACRANSAC;
         double localizerEstimatorError = std::numeric_limits<double>::infinity();
-        std::size_t localizerEstimatorMaxIterations = 4096;
+        std::size_t localizerEstimatorMaxIterations = 50000;
 
         // Pyramid scoring
 
@@ -147,11 +147,6 @@ class ReconstructionEngine_sequentialSfM : public ReconstructionEngine
      */
     void createInitialReconstruction(const std::vector<Pair>& initialImagePairCandidates);
 
-    /**
-     * @brief If we have already reconstructed landmarks in a previous reconstruction,
-     * we need to recognize the corresponding tracks and update the landmarkIds accordingly.
-     */
-    void remapLandmarkIdsToTrackIds();
 
     /**
      * @brief Loop of reconstruction updates
@@ -378,7 +373,7 @@ class ReconstructionEngine_sequentialSfM : public ReconstructionEngine
     /// Precomputed pyramid index for each trackId of each viewId.
     track::TracksPyramidPerView _map_featsPyramidPerView;
     /// Per camera confidence (A contrario estimated threshold error)
-    HashMap<IndexT, double> _map_ACThreshold;
+    std::map<IndexT, double> _map_ACThreshold;
 
     // Local Bundle Adjustment data
 

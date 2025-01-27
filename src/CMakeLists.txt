@@ -51,10 +51,12 @@ option(ALICEVISION_BUILD_SFM "Build AliceVision SfM part" ON)
 option(ALICEVISION_BUILD_MVS "Build AliceVision MVS part" ON)
 option(ALICEVISION_BUILD_HDR "Build AliceVision HDR part" ON)
 option(ALICEVISION_BUILD_SEGMENTATION "Build AliceVision Segmentation part" ON)
-option(ALICEVISION_BUILD_STEREOPHOTOMETRY "Build AliceVision StereoPhotometry part" ON)
+option(ALICEVISION_BUILD_PHOTOMETRICSTEREO "Build AliceVision Photometric Stereo part" ON)
 option(ALICEVISION_BUILD_PANORAMA "Build AliceVision panorama part" ON)
 option(ALICEVISION_BUILD_SOFTWARE "Build AliceVision command line tools." ON)
 option(ALICEVISION_BUILD_COVERAGE "Enable code coverage generation (gcc only)" OFF)
+option(ALICEVISION_BUILD_SWIG_BINDING "Build the Python binding with SWIG." OFF)
+trilean_option(ALICEVISION_BUILD_LIDAR "Build AliceVision LIDAR part" AUTO)
 trilean_option(ALICEVISION_BUILD_DOC "Build AliceVision documentation" AUTO)
 
 trilean_option(ALICEVISION_USE_OPENMP "Enable OpenMP parallelization" ON)
@@ -77,10 +79,11 @@ option(ALICEVISION_USE_MESHSDFILTER "Use MeshSDFilter library (enable MeshDenois
 option(ALICEVISION_REQUIRE_CERES_WITH_SUITESPARSE "Require Ceres with SuiteSparse (ensure best performances)" ON)
 
 option(ALICEVISION_USE_RPATH "Add RPATH on software with relative paths to libraries" ON)
-
+option(ALICEVISION_REMOVE_ABSOLUTE "Remove absolute paths in dependencies" OFF)
 option(ALICEVISION_BUILD_TESTS "Build AliceVision tests" OFF)
 
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+
 
 # Default build is in Release mode
 if(NOT CMAKE_BUILD_TYPE AND NOT MSVC)
@@ -91,8 +94,9 @@ if(NOT ALICEVISION_BUILD_SFM)
     SET(ALICEVISION_BUILD_MVS OFF)
     SET(ALICEVISION_BUILD_HDR OFF)
     SET(ALICEVISION_BUILD_SEGMENTATION OFF)
-    SET(ALICEVISION_BUILD_STEREOPHOTOMETRY OFF)
+    SET(ALICEVISION_BUILD_PHOTOMETRICSTEREO OFF)
     SET(ALICEVISION_BUILD_PANORAMA OFF)
+    SET(ALICEVISION_BUILD_LIDAR OFF)
 endif()
 
 # ==============================================================================
@@ -172,15 +176,6 @@ macro(add_target_properties _target _name)
 endmacro(add_target_properties)
 
 # ==============================================================================
-# Check that submodule have been initialized and updated
-# ==============================================================================
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/MeshSDFilter/external)
-  message(FATAL_ERROR
-    "\n submodule(s) are missing, please update your repository:\n"
-    "  > git submodule update -i\n")
-endif()
-
-# ==============================================================================
 # Additional cmake find modules
 # ==============================================================================
 set(CMAKE_MODULE_PATH
@@ -194,9 +189,15 @@ if(SSE2_FOUND OR TARGET_ARCHITECTURE STREQUAL "native")
   endif()
   set(ALICEVISION_HAVE_SSE 1)
 endif()
-if(UNIX AND NOT ALICEVISION_BUILD_COVERAGE)
-  set(CMAKE_C_FLAGS_RELEASE "-O3")
-  set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+if(UNIX)
+  if (ALICEVISION_BUILD_COVERAGE)
+    set(CMAKE_C_FLAGS_RELEASE "-O1")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O1")
+  else ()
+    set(CMAKE_C_FLAGS_RELEASE "-O3")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+  endif()
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX)
@@ -231,11 +232,11 @@ endif()
 # Enable code coverage generation (only with GCC)
 # ==============================================================================
 if(ALICEVISION_BUILD_COVERAGE AND CMAKE_COMPILER_IS_GNUCXX)
-  message("ALICEVISION_BUILD_COVERAGE enabled")
-  set(CMAKE_BUILD_TYPE "Debug")
-  add_definitions(--coverage -fprofile-arcs -ftest-coverage)
-  set(CMAKE_EXE_LINKER_FLAGS
-    "${CMAKE_EXE_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
+    message("ALICEVISION_BUILD_COVERAGE enabled")
+    include(CodeCoverage)
+    setup_target_for_coverage_gcovr_xml(
+    NAME coverage                 
+    EXECUTABLE ctest -j 4)
 endif()
 
 # ==============================================================================
@@ -278,7 +279,7 @@ set(ALICEVISION_BOOST_COMPONENTS atomic container date_time graph json log log_s
 if(ALICEVISION_BUILD_TESTS)
     set(ALICEVISION_BOOST_COMPONENT_UNITTEST unit_test_framework)
 endif()
-find_package(Boost 1.60.0 QUIET COMPONENTS ${ALICEVISION_BOOST_COMPONENTS} ${ALICEVISION_BOOST_COMPONENT_UNITTEST})
+find_package(Boost 1.76.0 QUIET COMPONENTS ${ALICEVISION_BOOST_COMPONENTS} ${ALICEVISION_BOOST_COMPONENT_UNITTEST})
 
 if(Boost_FOUND)
   message(STATUS "Boost ${Boost_LIB_VERSION} found.")
@@ -294,7 +295,7 @@ if(WIN32)
 
   #To be removed later, a bug to make things work with current vcpkg
   #https://github.com/microsoft/vcpkg/issues/22495
-  add_definitions(-DBOOST_USE_WINAPI_VERSION=BOOST_WINAPI_VERSION_WIN7)
+  add_definitions(-DBOOST_USE_WINAPI_VERSION=BOOST_WINAPI_VERSION_WIN10)
 endif()
 
 if(BUILD_SHARED_LIBS)
@@ -319,6 +320,13 @@ if(TARGET OpenEXR::OpenEXR OR TARGET IlmBase::Half)
   endif()
 else()
   message(SEND_ERROR "Failed to find OpenEXR.")
+endif()
+
+# ==============================================================================
+# Nanoflann
+# ==============================================================================
+if(ALICEVISION_BUILD_MVS)
+find_package(nanoflann REQUIRED)
 endif()
 
 # ==============================================================================
@@ -462,9 +470,24 @@ if(ALICEVISION_BUILD_SFM)
   find_package(Osi REQUIRED)
 endif()
 
-
+# ==============================================================================
+# Lemon
+# ==============================================================================
 if(ALICEVISION_BUILD_SFM)
   find_package(LEMON REQUIRED)
+endif()
+
+# ==============================================================================
+# libE57Format
+# ==============================================================================
+if(NOT ALICEVISION_BUILD_LIDAR STREQUAL "OFF")
+  find_package(E57Format)
+
+  if(E57Format_FOUND)
+    message(STATUS "E57Format found")
+  elseif(ALICEVISION_BUILD_LIDAR STREQUAL "ON")
+    message(SEND_ERROR "Failed to find E57Format")
+  endif()
 endif()
 
 
@@ -636,6 +659,8 @@ endif()
 set(ALICEVISION_HAVE_MESHSDFILTER 0)
 
 if(ALICEVISION_BUILD_MVS)
+  find_package(OpenMesh REQUIRED)
+
   if(ALICEVISION_USE_MESHSDFILTER STREQUAL "ON")
     set(ALICEVISION_HAVE_MESHSDFILTER 1)
     add_subdirectory(dependencies/MeshSDFilter)
@@ -739,6 +764,22 @@ if(ALICEVISION_HAVE_CUDA)
   endif()
 endif()
 
+# ==============================================================================
+# SWIG
+# ==============================================================================
+if(ALICEVISION_BUILD_SWIG_BINDING)
+  find_package(SWIG REQUIRED)  # SWIG dependency
+  if(SWIG_FOUND)
+    include(UseSWIG)
+    message(STATUS "SWIG found.")
+  else()
+    message(SEND_ERROR "Failed to find SWIG.")
+  endif()
+
+
+  find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module NumPy)  # Python dependencies
+endif()
+
 
 # ==============================================================================
 # CCTag
@@ -750,7 +791,7 @@ set(ALICEVISION_HAVE_CCTAG 0)
 if(ALICEVISION_BUILD_SFM)
   if(NOT ALICEVISION_USE_CCTAG STREQUAL "OFF")
     if(ALICEVISION_HAVE_OPENCV)
-      find_package(CCTag 1.0.0 CONFIG)
+      find_package(CCTag 1.0.4 CONFIG)
 
       if(CCTag_FOUND)
         set(ALICEVISION_HAVE_CCTAG 1)
@@ -921,12 +962,14 @@ message("** Target architecture: " ${TARGET_ARCHITECTURE})
 message("** Build Shared libs: " ${BUILD_SHARED_LIBS})
 message("** Build SfM part: " ${ALICEVISION_BUILD_SFM})
 message("** Build MVS part: " ${ALICEVISION_BUILD_MVS})
+message("** Build LIDAR part: " ${ALICEVISION_BUILD_LIDAR})
 message("** Build AliceVision tests: " ${ALICEVISION_BUILD_TESTS})
 message("** Build AliceVision documentation: " ${ALICEVISION_HAVE_DOC})
 message("** Build AliceVision+OpenCV samples programs: " ${ALICEVISION_HAVE_OPENCV})
 message("** Build UncertaintyTE: " ${ALICEVISION_HAVE_UNCERTAINTYTE})
 message("** Build MeshSDFilter: " ${ALICEVISION_HAVE_MESHSDFILTER})
 message("** Build Alembic exporter: " ${ALICEVISION_HAVE_ALEMBIC})
+message("** Build SWIG Python binding: " ${ALICEVISION_BUILD_SWIG_BINDING})
 message("** Enable code coverage generation: " ${ALICEVISION_BUILD_COVERAGE})
 message("** Enable OpenMP parallelization: " ${ALICEVISION_HAVE_OPENMP})
 message("** Use CUDA: " ${ALICEVISION_HAVE_CUDA})
@@ -948,6 +991,15 @@ if(ALICEVISION_BUILD_SFM)
   message(STATUS "COINUTILS: " ${CoinUtils_VERSION} "")
   message(STATUS "OSI: " ${Osi_VERSION} "")
   message(STATUS "LEMON: " ${LEMON_VERSION} "")
+endif()
+
+if(NOT ALICEVISION_BUILD_LIDAR STREQUAL "OFF")
+  message(STATUS "E57FORMAT: " ${E57Format} "")
+endif()
+
+if(ALICEVISION_BUILD_SWIG_BINDING)
+  message("\n")
+  message(STATUS "SWIG: " ${SWIG_VERSION} "")
 endif()
 
 message("\n")

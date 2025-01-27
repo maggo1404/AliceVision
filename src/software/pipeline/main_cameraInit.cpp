@@ -12,6 +12,7 @@
 #include <aliceVision/lensCorrectionProfile/lcp.hpp>
 #include <aliceVision/system/Logger.hpp>
 #include <aliceVision/system/main.hpp>
+#include <aliceVision/utils/filesIO.hpp>
 #include <aliceVision/cmdline/cmdline.hpp>
 #include <aliceVision/image/io.cpp>
 #include <aliceVision/image/dcp.hpp>
@@ -38,7 +39,7 @@
 // These constants define the current software version.
 // They must be updated when the command line is changed.
 #define ALICEVISION_SOFTWARE_VERSION_MAJOR 2
-#define ALICEVISION_SOFTWARE_VERSION_MINOR 0
+#define ALICEVISION_SOFTWARE_VERSION_MINOR 1
 
 using namespace aliceVision;
 using namespace aliceVision::sfmDataIO;
@@ -125,8 +126,7 @@ inline std::ostream& operator<<(std::ostream& os, EGroupCameraFallback s) { retu
 
 inline std::istream& operator>>(std::istream& in, EGroupCameraFallback& s)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     s = EGroupCameraFallback_stringToEnum(token);
     return in;
 }
@@ -167,7 +167,7 @@ int aliceVision_main(int argc, char** argv)
 
     // user optional parameters
     std::string defaultCameraModelName;
-    std::string allowedCameraModelsStr = "pinhole,radial1,radial3,brown,fisheye4,fisheye1";
+    std::string defaultDistortionModelName;
     std::string colorProfileDatabaseDirPath;
 
     double defaultFocalLength = -1.0;
@@ -216,9 +216,9 @@ int aliceVision_main(int argc, char** argv)
         ("defaultOffsetY", po::value<double>(&defaultOffsetY)->default_value(defaultOffsetY),
          "Default offset from the principal point Y coordinate.")
         ("defaultCameraModel", po::value<std::string>(&defaultCameraModelName)->default_value(defaultCameraModelName),
-         "Default camera model type (pinhole, radial1, radial3, brown, fisheye4, fisheye1).")
-        ("allowedCameraModels", po::value<std::string>(&allowedCameraModelsStr)->default_value(allowedCameraModelsStr),
-         "Permitted model type (pinhole, radial1, radial3, brown, fisheye4, fisheye1).")
+         "Default camera model type (pinhole, equidistant, equirectangular).")
+        ("defaultDistortionModel", po::value<std::string>(&defaultDistortionModelName)->default_value(defaultDistortionModelName),
+         "Default Distortion model type (none, radialk1, radialk3, radialk3pt, radialbrown, fisheye, fisheye1).")
         ("groupCameraFallback", po::value<EGroupCameraFallback>(&groupCameraFallback)->default_value(groupCameraFallback),
          std::string("When there is no serial number in the image metadata, we cannot know if the images come from the same camera. "
          "This is problematic for grouping images sharing the same internal camera settings and we have to decide on a fallback strategy:\n"
@@ -253,6 +253,11 @@ int aliceVision_main(int argc, char** argv)
     if (!defaultCameraModelName.empty())
         defaultCameraModel = camera::EINTRINSIC_stringToEnum(defaultCameraModelName);
 
+    // set user Distortion model
+    camera::EDISTORTION defaultDistortionModel = camera::EDISTORTION::DISTORTION_NONE;
+    if (!defaultDistortionModelName.empty())
+        defaultDistortionModel = camera::EDISTORTION_stringToEnum(defaultDistortionModelName);
+
     // check user choose at least one input option
     if (imageFolder.empty() && sfmFilePath.empty())
     {
@@ -268,14 +273,14 @@ int aliceVision_main(int argc, char** argv)
     }
 
     // check input folder
-    if (!imageFolder.empty() && !fs::exists(imageFolder) && !fs::is_directory(imageFolder))
+    if (!imageFolder.empty() && !utils::exists(imageFolder) && !fs::is_directory(imageFolder))
     {
         ALICEVISION_LOG_ERROR("The input folder doesn't exist");
         return EXIT_FAILURE;
     }
 
     // check sfm file
-    if (!sfmFilePath.empty() && !fs::exists(sfmFilePath) && !fs::is_regular_file(sfmFilePath))
+    if (!sfmFilePath.empty() && !utils::exists(sfmFilePath) && !fs::is_regular_file(sfmFilePath))
     {
         ALICEVISION_LOG_ERROR("The input sfm file doesn't exist");
         return EXIT_FAILURE;
@@ -292,7 +297,7 @@ int aliceVision_main(int argc, char** argv)
     {
         const std::string outputFolderPart = fs::path(outputFilePath).parent_path().string();
 
-        if (!outputFolderPart.empty() && !fs::exists(outputFolderPart))
+        if (!outputFolderPart.empty() && !utils::exists(outputFolderPart))
         {
             if (!fs::create_directory(outputFolderPart))
             {
@@ -334,8 +339,6 @@ int aliceVision_main(int argc, char** argv)
         ALICEVISION_LOG_ERROR("Invalid input sensor database '" << sensorDatabasePath << "', please specify a valid file.");
         return EXIT_FAILURE;
     }
-
-    camera::EINTRINSIC allowedCameraModels = camera::EINTRINSIC_parseStringToBitmask(allowedCameraModelsStr);
 
     // use current time as seed for random generator for intrinsic Id without metadata
     std::srand(std::time(0));
@@ -465,7 +468,10 @@ int aliceVision_main(int argc, char** argv)
             }
         }
 
-        if (boost::algorithm::starts_with(parentPath.stem().string(), "ps_") || boost::algorithm::starts_with(parentPath.stem().string(), "hdr_"))
+        std::string toCompare = parentPath.stem().string();
+        transform(toCompare.begin(), toCompare.end(), toCompare.begin(), ::tolower);
+
+        if (boost::algorithm::starts_with(toCompare, "ps_") || boost::algorithm::starts_with(parentPath.stem().string(), "hdr_"))
         {
             std::hash<std::string> hash;
             IndexT tmpPoseID = hash(parentPath.string());  // use a temporary pose Id to group the images
@@ -639,6 +645,7 @@ int aliceVision_main(int argc, char** argv)
 
         // build intrinsic
         std::shared_ptr<camera::IntrinsicBase> intrinsicBase = getViewIntrinsic(view,
+                                                                                intrinsicInitMode,
                                                                                 focalLengthmm,
                                                                                 sensorWidth,
                                                                                 defaultFocalLength,
@@ -648,7 +655,7 @@ int aliceVision_main(int argc, char** argv)
                                                                                 defaultOffsetY,
                                                                                 &lensParam,
                                                                                 defaultCameraModel,
-                                                                                allowedCameraModels);
+                                                                                defaultDistortionModel);
 
         if (!lensParam.isEmpty())
             ++lcpGeometryViewCount;
@@ -798,24 +805,24 @@ int aliceVision_main(int argc, char** argv)
     {
         for (const auto& poseGroup : poseGroups)
         {
-            bool hasAmbiant = false;
+            bool hasAmbient = false;
 
-            // Photometric stereo : ambiant viewId used for all pictures
+            // Photometric stereo : ambient viewId used for all pictures
             for (const IndexT vId : poseGroup.second)
             {
                 const fs::path imagePath = fs::path(sfmData.getView(vId).getImage().getImagePath());
-                if (boost::algorithm::icontains(imagePath.stem().string(), "ambiant"))
+                if (boost::algorithm::icontains(imagePath.stem().string(), "ambient"))
                 {
-                    hasAmbiant = true;
+                    hasAmbient = true;
                     for (const auto it : poseGroup.second)
                     {
-                        // Update poseId with ambiant view id
+                        // Update poseId with ambient view id
                         sfmData.getView(it).setPoseId(vId);
                     }
                     break;
                 }
             }
-            if (!hasAmbiant)
+            if (!hasAmbient)
             {
                 // Sort views of the poseGroup per timestamps
                 std::vector<std::pair<int64_t, IndexT>> sortedViews;

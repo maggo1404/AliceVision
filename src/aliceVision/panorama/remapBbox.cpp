@@ -97,7 +97,7 @@ bool computeCoarseBB_Equidistant(BoundingBox& coarse_bbox,
             /**
              * Project this ray to camera pixel coordinates
              */
-            const Vec2 pix_disto = intrinsics.project(pose, ray.homogeneous(), true);
+            const Vec2 pix_disto = intrinsics.transformProject(pose, ray.homogeneous(), true);
 
             /**
              * Ignore invalid coordinates
@@ -124,7 +124,7 @@ bool computeCoarseBB_Equidistant(BoundingBox& coarse_bbox,
             /**
              * Project this ray to camera pixel coordinates
              */
-            const Vec2 pix_disto = intrinsics.project(pose, ray.homogeneous(), true);
+            const Vec2 pix_disto = intrinsics.transformProject(pose, ray.homogeneous(), true);
 
             /**
              * Ignore invalid coordinates
@@ -182,7 +182,7 @@ bool computeCoarseBB_Equidistant(BoundingBox& coarse_bbox,
             /**
              * Project this ray to camera pixel coordinates
              */
-            const Vec2 pix_disto = intrinsics.project(pose, ray.homogeneous(), true);
+            const Vec2 pix_disto = intrinsics.transformProject(pose, ray.homogeneous(), true);
 
             /**
              * Ignore invalid coordinates
