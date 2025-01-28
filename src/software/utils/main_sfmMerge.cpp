@@ -113,11 +113,21 @@ bool simpleMerge(sfmData::SfMData & sfmData1, const sfmData::SfMData & sfmData2)
         auto& intrinsics2 = sfmData2.getIntrinsics();
         const size_t totalSize = intrinsics1.size() + intrinsics2.size();
 
-        intrinsics1.insert(intrinsics2.begin(), intrinsics2.end());
-        if (intrinsics1.size() < totalSize)
+        //If both sfm share a common intrinsicId
+        //Make sure there is no ambiguity and the  content is the same
+        for (const auto & [key, intrinsic] : intrinsics1)
         {
-            ALICEVISION_LOG_ERROR("Unhandled error: common intrinsics ID between both SfMData");
-            return false;
+            const auto & itIntrinsicOther = intrinsics2.find(key);
+            if (itIntrinsicOther != intrinsics2.end())
+            {
+                const auto & obj1 = *intrinsic;
+                const auto & obj2 = *(itIntrinsicOther->second);
+
+                if (!(obj1 == obj2))
+                {
+                    ALICEVISION_LOG_ERROR("Unhandled error: common intrinsic ID with different parameters between both SfMData");
+                }
+            } 
         }
     }
 
