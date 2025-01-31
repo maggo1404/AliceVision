@@ -88,7 +88,10 @@ std::string getImageColorSpace(const OIIO::ImageSpec& oiioSpec, const std::strin
     std::string colorSpaceFromFileName = "";
     if (!imagePath.empty())
     {
-        colorSpaceFromFileName = getGlobalColorConfigOCIO().getColorSpaceFromFilepath(imagePath);
+        // Use only filename for color space infering
+        const std::string filename = fs::path(imagePath).filename().string(); 
+        colorSpaceFromFileName = getGlobalColorConfigOCIO().getColorSpaceFromFilepath(filename);
+        boost::algorithm::to_lower(colorSpaceFromFileName);
     }
 
     std::map<std::string, std::string> mapColorSpaces;
@@ -121,7 +124,7 @@ std::string getImageColorSpace(const OIIO::ImageSpec& oiioSpec, const std::strin
     {
         colorSpace = mapColorSpaces.at("workPlateColourSpace");
     }
-    else if (!colorSpaceFromFileName.empty())
+    else if (!colorSpaceFromFileName.empty() && colorSpaceFromFileName != "raw")
     {
         colorSpace = colorSpaceFromFileName;
     }
@@ -188,8 +191,7 @@ std::ostream& operator<<(std::ostream& os, EImageFileType imageFileType) { retur
 
 std::istream& operator>>(std::istream& in, EImageFileType& imageFileType)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     imageFileType = EImageFileType_stringToEnum(token);
     return in;
 }
@@ -278,8 +280,7 @@ std::ostream& operator<<(std::ostream& os, EStorageDataType dataType) { return o
 
 std::istream& operator>>(std::istream& in, EStorageDataType& dataType)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     dataType = EStorageDataType_stringToEnum(token);
     return in;
 }
@@ -360,8 +361,7 @@ std::ostream& operator<<(std::ostream& os, EImageExrCompression exrCompression) 
 
 std::istream& operator>>(std::istream& in, EImageExrCompression& exrCompression)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     exrCompression = EImageExrCompression_stringToEnum(token);
     return in;
 }
@@ -402,8 +402,7 @@ std::ostream& operator<<(std::ostream& os, EImageQuality imageQuality) { return 
 
 std::istream& operator>>(std::istream& in, EImageQuality& imageQuality)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     imageQuality = EImageQuality_stringToEnum(token);
     return in;
 }
@@ -474,8 +473,7 @@ std::ostream& operator<<(std::ostream& os, ERawColorInterpretation rawColorInter
 
 std::istream& operator>>(std::istream& in, ERawColorInterpretation& rawColorInterpretation)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     rawColorInterpretation = ERawColorInterpretation_stringToEnum(token);
     return in;
 }
@@ -1034,7 +1032,8 @@ void writeImage(const std::string& path,
     ALICEVISION_LOG_DEBUG("[IO] Write Image: " << path << "\n"
                                                << "\t- width: " << image.width() << "\n"
                                                << "\t- height: " << image.height() << "\n"
-                                               << "\t- channels: " << nchannels);
+                                               << "\t- channels: " << nchannels << "\n"
+                                               << "\t- color space: " << EImageColorSpace_enumToOIIOString(toColorSpace));
 
     oiio::ImageSpec imageSpec(image.width(), image.height(), nchannels, typeDesc);
     imageSpec.extra_attribs = metadata;  // add custom metadata
@@ -1361,20 +1360,22 @@ bool tryLoadMask(Image<unsigned char>* mask,
                  const std::string& srcImage,
                  const std::string& fileExtension)
 {
-    for (const auto& masksFolder_str : masksFolders)
+
+    for (const auto& masksFolderStr : masksFolders)
     {
-        if (!masksFolder_str.empty() && fs::exists(masksFolder_str))
+
+        if (!masksFolderStr.empty() && utils::exists(masksFolderStr))
         {
-            const auto masksFolder = fs::path(masksFolder_str);
+            const auto masksFolder = fs::path(masksFolderStr);
             const auto idMaskPath = masksFolder / fs::path(std::to_string(viewId)).replace_extension(fileExtension);
             const auto nameMaskPath = masksFolder / fs::path(srcImage).filename().replace_extension(fileExtension);
 
-            if (fs::exists(idMaskPath))
+            if (utils::exists(idMaskPath))
             {
                 readImage(idMaskPath.string(), *mask, EImageColorSpace::LINEAR);
                 return true;
             }
-            else if (fs::exists(nameMaskPath))
+            else if (utils::exists(nameMaskPath))
             {
                 readImage(nameMaskPath.string(), *mask, EImageColorSpace::LINEAR);
                 return true;

@@ -10,6 +10,7 @@
 #include <aliceVision/image/all.hpp>
 #include <aliceVision/system/ProgressDisplay.hpp>
 #include <aliceVision/system/main.hpp>
+#include <aliceVision/utils/filesIO.hpp>
 #include <aliceVision/cmdline/cmdline.hpp>
 #include <boost/program_options.hpp>
 
@@ -42,7 +43,7 @@ bool exportToPMVSFormat(const SfMData& sfm_data,
                         const bool b_VisData = true)
 {
     bool bOk = true;
-    if (!fs::exists(sOutDirectory))
+    if (!utils::exists(sOutDirectory))
     {
         fs::create_directory(sOutDirectory);
         bOk = fs::is_directory(sOutDirectory);
@@ -69,7 +70,7 @@ bool exportToPMVSFormat(const SfMData& sfm_data,
 
         // Since PMVS requires contiguous camera index, and that some views can have some missing poses,
         // we reindex the poses to ensure a contiguous pose list.
-        HashMap<IndexT, IndexT> map_viewIdToContiguous;
+        std::map<IndexT, IndexT> map_viewIdToContiguous;
 
         // Export valid views as Projective Cameras:
         for (Views::const_iterator iter = sfm_data.getViews().begin(); iter != sfm_data.getViews().end(); ++iter, ++progressDisplay)
@@ -208,7 +209,7 @@ bool exportToBundlerFormat(const SfMData& sfm_data,
     {
         // Since PMVS requires contiguous camera index, and that some views can have some missing poses,
         // we reindex the poses to ensure a contiguous pose list.
-        HashMap<IndexT, IndexT> map_viewIdToContiguous;
+        std::map<IndexT, IndexT> map_viewIdToContiguous;
 
         // Count the number of valid cameras and re-index the viewIds
         for (Views::const_iterator iter = sfm_data.getViews().begin(); iter != sfm_data.getViews().end(); ++iter)
@@ -330,7 +331,7 @@ int aliceVision_main(int argc, char* argv[])
     }
 
     // Create output dir
-    if (!fs::exists(outputFolder))
+    if (!utils::exists(outputFolder))
         fs::create_directory(outputFolder);
 
     SfMData sfmData;

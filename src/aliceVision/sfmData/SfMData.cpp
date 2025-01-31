@@ -8,6 +8,7 @@
 #include "SfMData.hpp"
 
 #include <aliceVision/system/Logger.hpp>
+#include <aliceVision/utils/filesIO.hpp>
 
 #include <filesystem>
 
@@ -19,6 +20,33 @@ using namespace aliceVision::camera;
 using namespace aliceVision::image;
 
 namespace fs = std::filesystem;
+
+SfMData::SfMData(const SfMData & other, const Eigen::Vector3d & bbMin, const Eigen::Vector3d & bbMax)
+{
+    _views = other._views;
+    _intrinsics  = other._intrinsics;
+    constraints2d = other.constraints2d;
+    rotationpriors = other.rotationpriors;
+    _absolutePath = other._absolutePath;
+    _featuresFolders = other._featuresFolders;
+    _matchesFolders = other._matchesFolders;
+    _poses = other._poses;
+    _rigs = other._rigs;
+
+    for (const auto & pl : other._landmarks)
+    {
+        const auto & pt = pl.second.X;
+
+        if (pt.x() < bbMin.x()) continue;
+        if (pt.y() < bbMin.y()) continue;
+        if (pt.z() < bbMin.z()) continue;
+        if (pt.x() > bbMax.x()) continue;
+        if (pt.y() > bbMax.y()) continue;
+        if (pt.z() > bbMax.z()) continue;
+
+        _landmarks.insert(pl);
+    }
+}
 
 bool SfMData::operator==(const SfMData& other) const
 {
@@ -120,21 +148,26 @@ std::vector<std::string> toAbsoluteFolders(const std::vector<std::string>& folde
     // If absolute path is not set, return input folders
     if (absolutePath.empty())
         return folders;
+    // project folder from project filepath
+    const fs::path projectFolder = fs::path(absolutePath).parent_path();
     // Else, convert relative paths to absolute paths
     std::vector<std::string> absolutePaths;
     absolutePaths.reserve(folders.size());
     for (const auto& folder : folders)
     {
-        const fs::path f = fs::absolute(folder);
+        fs::path f(folder);
+        if(f.is_relative())
+        {
+            // convert to absolute path
+            f = projectFolder / folder;
+        }
         if (fs::exists(f))
         {
+            // simplify the path to avoid things like "../.."
             // fs::canonical can only be used if the path exists
-            absolutePaths.push_back(fs::canonical(f).string());
+            f = fs::canonical(f);
         }
-        else
-        {
-            absolutePaths.push_back(f.string());
-        }
+        absolutePaths.push_back(f.string());
     }
     return absolutePaths;
 }
@@ -306,6 +339,45 @@ void SfMData::resetParameterStates()
     {
         pi.second->initializeState();
     }
+}
+
+void SfMData::getBoundingBox(Eigen::Vector3d & bbMin, Eigen::Vector3d & bbMax)
+{
+    bbMin.fill(std::numeric_limits<double>::max());
+    bbMax.fill(std::numeric_limits<double>::lowest());
+
+    for (const auto & pl : _landmarks)
+    {
+        const auto & pt = pl.second.X;
+
+        bbMin.x() = std::min(bbMin.x(), pt.x());
+        bbMin.y() = std::min(bbMin.y(), pt.y());
+        bbMin.z() = std::min(bbMin.z(), pt.z());
+        bbMax.x() = std::max(bbMax.x(), pt.x());
+        bbMax.y() = std::max(bbMax.y(), pt.y());
+        bbMax.z() = std::max(bbMax.z(), pt.z());
+    }
+}
+
+IndexT SfMData::findView(const std::string & imageName) const
+{
+    IndexT out_viewId = UndefinedIndexT;
+
+    // list views uid / filenames and find the one that correspond to the user ones
+    for (const auto& viewPair : getViews())
+    {
+        const auto & v = viewPair.second;
+
+        if (imageName == std::to_string(v->getViewId()) || 
+            imageName == fs::path(v->getImage().getImagePath()).filename().string() ||
+            imageName == v->getImage().getImagePath())
+        {
+            out_viewId = v->getViewId();
+            break;
+        }
+    }
+
+    return out_viewId;
 }
 
 LandmarksPerView getLandmarksPerViews(const SfMData& sfmData)

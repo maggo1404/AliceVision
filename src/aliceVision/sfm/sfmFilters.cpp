@@ -158,7 +158,7 @@ bool eraseUnstablePoses(sfmData::SfMData& sfmData, const IndexT minPointsPerPose
     const sfmData::Landmarks& landmarks = sfmData.getLandmarks();
 
     // Count the observation poses occurrence
-    HashMap<IndexT, IndexT> posesCount;
+    std::map<IndexT, IndexT> posesCount;
 
     // Init with 0 count, undefined rig id (in order to be able to remove non referenced elements)
     for (sfmData::Poses::const_iterator itPoses = sfmData.getPoses().begin(); itPoses != sfmData.getPoses().end(); ++itPoses)
@@ -183,7 +183,7 @@ bool eraseUnstablePoses(sfmData::SfMData& sfmData, const IndexT minPointsPerPose
     }
 
     // If usage count is smaller than the threshold, remove the Pose
-    for (HashMap<IndexT, IndexT>::const_iterator it = posesCount.begin(); it != posesCount.end(); ++it)
+    for (std::map<IndexT, IndexT>::const_iterator it = posesCount.begin(); it != posesCount.end(); ++it)
     {
         if (it->second < minPointsPerPose)
         {
@@ -278,6 +278,47 @@ bool eraseUnstablePosesAndObservations(sfmData::SfMData& sfmData,
     } while (removedContent);
 
     return removedPoses || removedObservations;
+}
+
+IndexT removeConstraints(sfmData::SfMData& sfmData, double maxDist)
+{
+    const auto & landmarks = sfmData.getLandmarks();
+    auto & constraints = sfmData.getConstraintsPoint();
+
+    // Remove all constraints which are very far from associated landmark
+
+    size_t count = 0;
+    auto itConstraints = constraints.begin();
+    while (itConstraints != constraints.end())
+    {
+        IndexT trackId = itConstraints->first;
+
+        auto landmarkIt = landmarks.find(trackId);
+
+        //If the associated landmark does not exists anymore, remove the constraint
+        if (landmarkIt == landmarks.end())
+        {
+            itConstraints = constraints.erase(itConstraints);
+            count++;
+            continue;
+        }
+    
+        const Vec3 & lpt = landmarkIt->second.X;
+        double dist = (itConstraints->second.point - lpt).norm();
+
+        //Remove if the landmark is too far away
+        if (dist > maxDist)
+        {
+            itConstraints = constraints.erase(itConstraints);
+            count++;
+        }
+        else 
+        {
+            ++itConstraints;
+        }
+    }
+
+    return count;
 }
 
 }  // namespace sfm

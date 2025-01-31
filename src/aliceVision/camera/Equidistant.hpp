@@ -59,42 +59,45 @@ class Equidistant : public IntrinsicScaleOffsetDisto
 
     Equidistant* clone() const override { return new Equidistant(*this); }
 
+    static std::shared_ptr<Equidistant> cast(std::shared_ptr<IntrinsicBase> sptr);
+
     void assign(const IntrinsicBase& other) override { *this = dynamic_cast<const Equidistant&>(other); }
 
     bool isValid() const override { return _scale(0) > 0 && IntrinsicBase::isValid(); }
 
     EINTRINSIC getType() const override;
 
-    Vec2 project(const Eigen::Matrix4d& pose, const Vec4& pt, bool applyDistortion = true) const override;
+    Vec2 transformProject(const Eigen::Matrix4d& pose, const Vec4& pt, bool applyDistortion = true) const override;
 
-    Vec2 project(const geometry::Pose3& pose, const Vec4& pt3D, bool applyDistortion = true) const
+    Vec2 transformProject(const geometry::Pose3& pose, const Vec4& pt3D, bool applyDistortion = true) const
     {
-        return project(pose.getHomogeneous(), pt3D, applyDistortion);
+        return transformProject(pose.getHomogeneous(), pt3D, applyDistortion);
     }
 
-    Eigen::Matrix<double, 2, 9> getDerivativeProjectWrtRotation(const Eigen::Matrix4d& pose, const Vec4& pt) const;
+    Vec2 project(const Vec4& pt, bool applyDistortion = true) const override;
 
-    Eigen::Matrix<double, 2, 16> getDerivativeProjectWrtPose(const Eigen::Matrix4d& pose, const Vec4& pt) const override;
+    Eigen::Matrix<double, 2, 3> getDerivativeTransformProjectWrtPoint3(const Eigen::Matrix4d& pose, const Vec4& pt) const override;
 
-    Eigen::Matrix<double, 2, 16> getDerivativeProjectWrtPoseLeft(const Eigen::Matrix4d& pose, const Vec4& pt) const override;
+    Eigen::Matrix<double, 2, 3> getDerivativeTransformProjectWrtDisto(const Eigen::Matrix4d& pose, const Vec4& pt) const;
 
-    Eigen::Matrix<double, 2, 4> getDerivativeProjectWrtPoint(const Eigen::Matrix4d& pose, const Vec4& pt) const override;
+    Eigen::Matrix<double, 2, 2> getDerivativeTransformProjectWrtScale(const Eigen::Matrix4d& pose, const Vec4& pt) const;
 
-    Eigen::Matrix<double, 2, 3> getDerivativeProjectWrtPoint3(const Eigen::Matrix4d& pose, const Vec4& pt) const override;
+    Eigen::Matrix<double, 2, 2> getDerivativeTransformProjectWrtPrincipalPoint(const Eigen::Matrix4d& pose, const Vec4& pt) const;
 
-    Eigen::Matrix<double, 2, 3> getDerivativeProjectWrtDisto(const Eigen::Matrix4d& pose, const Vec4& pt) const;
-
-    Eigen::Matrix<double, 2, 2> getDerivativeProjectWrtScale(const Eigen::Matrix4d& pose, const Vec4& pt) const;
-
-    Eigen::Matrix<double, 2, 2> getDerivativeProjectWrtPrincipalPoint(const Eigen::Matrix4d& pose, const Vec4& pt) const;
-
-    Eigen::Matrix<double, 2, Eigen::Dynamic> getDerivativeProjectWrtParams(const Eigen::Matrix4d& pose, const Vec4& pt3D) const override;
+    Eigen::Matrix<double, 2, Eigen::Dynamic> getDerivativeTransformProjectWrtParams(const Eigen::Matrix4d& pose, const Vec4& pt3D) const override;
 
     Vec3 toUnitSphere(const Vec2& pt) const override;
 
     Eigen::Matrix<double, 3, 2> getDerivativetoUnitSphereWrtPoint(const Vec2& pt) const;
 
     Eigen::Matrix<double, 3, 2> getDerivativetoUnitSphereWrtScale(const Vec2& pt) const;
+
+    /**
+     * @brief Get the derivative of the unit sphere backprojection
+     * @param[in] pt2D The 2D point
+     * @return The backproject jacobian with respect to the pose
+     */
+    Eigen::Matrix<double, 3, Eigen::Dynamic> getDerivativeBackProjectUnitWrtParams(const Vec2& pt2D) const override;
 
     double imagePlaneToCameraPlaneError(double value) const override;
 
@@ -112,7 +115,8 @@ class Equidistant : public IntrinsicScaleOffsetDisto
 
     /**
      * @brief Return true if this ray should be visible in the image
-     * @return true if this ray is visible theorically
+     * @param[in] ray the ray that may or may not be visible in the image
+     * @return True if this ray is visible theoretically, false otherwise
      */
     bool isVisibleRay(const Vec3& ray) const override;
 
@@ -131,16 +135,23 @@ class Equidistant : public IntrinsicScaleOffsetDisto
     inline Vec2 getCircleCenter() const { return _circleCenter; }
 
     /**
-     * @Brief get horizontal fov in radians
-     * @return  horizontal fov in radians
+     * @brief Get the horizontal FOV in radians
+     * @return Horizontal FOV in radians
      */
     double getHorizontalFov() const override;
 
     /**
-     * @Brief get vertical fov in radians
-     * @return  vertical fov in radians
+     * @brief Get the vertical FOV in radians
+     * @return Vertical FOV in radians
      */
     double getVerticalFov() const override;
+
+
+    /**
+     * @brief how a one pixel change relates to an angular change
+     * @return a value in radians
+    */
+    double pixelProbability() const override;
 
   protected:
     double _circleRadius{0.0};

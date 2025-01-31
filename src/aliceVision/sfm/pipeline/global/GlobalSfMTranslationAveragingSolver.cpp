@@ -43,7 +43,7 @@ bool GlobalSfMTranslationAveragingSolver::run(ETranslationAveragingMethod eTrans
                                               SfMData& sfmData,
                                               const feature::FeaturesPerView& normalizedFeaturesPerView,
                                               const matching::PairwiseMatches& pairwiseMatches,
-                                              const HashMap<IndexT, Mat3>& mapGlobalR,
+                                              const std::map<IndexT, Mat3>& mapGlobalR,
                                               std::mt19937& randomNumberGenerator,
                                               matching::PairwiseMatches& tripletWiseMatches)
 {
@@ -67,7 +67,7 @@ bool GlobalSfMTranslationAveragingSolver::run(ETranslationAveragingMethod eTrans
 
 bool GlobalSfMTranslationAveragingSolver::translationAveraging(ETranslationAveragingMethod eTranslationAveragingMethod,
                                                                SfMData& sfmData,
-                                                               const HashMap<IndexT, Mat3>& mapGlobalR)
+                                                               const std::map<IndexT, Mat3>& mapGlobalR)
 {
     //-------------------
     //-- GLOBAL TRANSLATIONS ESTIMATION from initial triplets t_ij guess
@@ -99,7 +99,7 @@ bool GlobalSfMTranslationAveragingSolver::translationAveraging(ETranslationAvera
         //-- Update initial estimates from [minId,maxId] to range [0->Ncam]
         translationAveraging::RelativeInfoVec vecInitialRijTijEstimatesCpy = m_vec_initialRijTijEstimates;
         const PairSet pairs = translationAveraging::getPairs(vecInitialRijTijEstimatesCpy);
-        HashMap<IndexT, IndexT> _reindexForward, _reindexBackward;
+        std::map<IndexT, IndexT> _reindexForward, _reindexBackward;
         reindex(pairs, _reindexForward, _reindexBackward);
         for (size_t i = 0; i < vecInitialRijTijEstimatesCpy.size(); ++i)
         {
@@ -274,7 +274,7 @@ bool GlobalSfMTranslationAveragingSolver::translationAveraging(ETranslationAvera
 void GlobalSfMTranslationAveragingSolver::computeTranslations(const SfMData& sfmData,
                                                               const feature::FeaturesPerView& normalizedFeaturesPerView,
                                                               const matching::PairwiseMatches& pairwiseMatches,
-                                                              const HashMap<IndexT, Mat3>& mapGlobalR,
+                                                              const std::map<IndexT, Mat3>& mapGlobalR,
                                                               std::mt19937& randomNumberGenerator,
                                                               matching::PairwiseMatches& tripletWiseMatches)
 {
@@ -291,7 +291,7 @@ void GlobalSfMTranslationAveragingSolver::computeTranslations(const SfMData& sfm
 //-- Perform a trifocal estimation of the graph contained in vec_triplets with an
 // edge coverage algorithm. Its complexity is sub-linear in term of edges count.
 void GlobalSfMTranslationAveragingSolver::computePutativeTranslationEdgesCoverage(const SfMData& sfmData,
-                                                                                  const HashMap<IndexT, Mat3>& mapGlobalR,
+                                                                                  const std::map<IndexT, Mat3>& mapGlobalR,
                                                                                   const feature::FeaturesPerView& normalizedFeaturesPerView,
                                                                                   const matching::PairwiseMatches& pairwiseMatches,
                                                                                   std::mt19937& randomNumberGenerator,
@@ -333,7 +333,7 @@ void GlobalSfMTranslationAveragingSolver::computePutativeTranslationEdgesCoverag
         // An estimated triplets of translation mark three edges as estimated.
 
         //-- precompute the number of track per triplet:
-        HashMap<IndexT, IndexT> mapTracksPerTriplets;
+        std::map<IndexT, IndexT> mapTracksPerTriplets;
 
 #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < (int)vecTriplets.size(); ++i)
@@ -497,7 +497,7 @@ void GlobalSfMTranslationAveragingSolver::computePutativeTranslationEdgesCoverag
                                     // create pairwise matches from inlier track
                                     for (size_t indexI = 0; indexI < track.featPerView.size(); ++indexI)
                                     {
-                                        Track::FeatureIdPerView::const_iterator iterI = track.featPerView.begin();
+                                        Track::TrackInfoPerView::const_iterator iterI = track.featPerView.begin();
                                         std::advance(iterI, indexI);
 
                                         // extract camera indexes
@@ -507,7 +507,7 @@ void GlobalSfMTranslationAveragingSolver::computePutativeTranslationEdgesCoverag
                                         // loop on subtracks
                                         for (size_t indexJ = indexI + 1; indexJ < track.featPerView.size(); ++indexJ)
                                         {
-                                            Track::FeatureIdPerView::const_iterator iterJ = track.featPerView.begin();
+                                            Track::TrackInfoPerView::const_iterator iterJ = track.featPerView.begin();
                                             std::advance(iterJ, indexJ);
 
                                             // extract camera indexes
@@ -555,7 +555,7 @@ void GlobalSfMTranslationAveragingSolver::computePutativeTranslationEdgesCoverag
 
 // Robust estimation and refinement of a translation and 3D points of an image triplets.
 bool GlobalSfMTranslationAveragingSolver::estimateTTriplet(const SfMData& sfmData,
-                                                           const HashMap<IndexT, Mat3>& mapGlobalR,
+                                                           const std::map<IndexT, Mat3>& mapGlobalR,
                                                            const feature::FeaturesPerView& normalizedFeaturesPerView,
                                                            const matching::PairwiseMatches& pairwiseMatches,
                                                            const graph::Triplet& posesId,
@@ -602,7 +602,7 @@ bool GlobalSfMTranslationAveragingSolver::estimateTTriplet(const SfMData& sfmDat
     {
         const track::Track& track = iterTracks->second;
         size_t index = 0;
-        for (track::Track::FeatureIdPerView::const_iterator iter = track.featPerView.begin(); iter != track.featPerView.end(); ++iter, ++index)
+        for (track::Track::TrackInfoPerView::const_iterator iter = track.featPerView.begin(); iter != track.featPerView.end(); ++iter, ++index)
         {
             const size_t idxView = iter->first;
             const feature::PointFeature pt = normalizedFeaturesPerView.getFeatures(idxView, track.descType)[iter->second.featureId];
@@ -690,7 +690,7 @@ bool GlobalSfMTranslationAveragingSolver::estimateTTriplet(const SfMData& sfmDat
         const size_t trackId = vecInliers[idx];
         const track::submapTrack& track = tracks.at(trackId);
         Observations& obs = structure[idx].obs;
-        for (track::Track::FeatureIdPerView::const_iterator it = track.begin(); it != track.end(); ++it)
+        for (track::Track::TrackInfoPerView::const_iterator it = track.begin(); it != track.end(); ++it)
         {
             // get view Id and feat ID
             const size_t viewIndex = it->first;

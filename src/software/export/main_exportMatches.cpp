@@ -31,7 +31,7 @@
 
 // These constants define the current software version.
 // They must be updated when the command line is changed.
-#define ALICEVISION_SOFTWARE_VERSION_MAJOR 1
+#define ALICEVISION_SOFTWARE_VERSION_MAJOR 2
 #define ALICEVISION_SOFTWARE_VERSION_MINOR 0
 
 using namespace aliceVision;
@@ -87,6 +87,8 @@ int aliceVision_main(int argc, char** argv)
     std::string outputFolder;
     std::vector<std::string> featuresFolders;
     std::vector<std::string> matchesFolders;
+    std::string filterA = "";
+    std::string filterB = "";
 
     // user optional parameters
 
@@ -107,7 +109,9 @@ int aliceVision_main(int argc, char** argv)
     po::options_description optionalParams("Optional parameters");
     optionalParams.add_options()
         ("describerTypes,d", po::value<std::string>(&describerTypesName)->default_value(describerTypesName),
-         EImageDescriberType_informations().c_str());
+         EImageDescriberType_informations().c_str())
+         ("filterA", po::value<std::string>(&filterA)->default_value(filterA), "Restrict one of the two views to be this.")
+         ("filterB", po::value<std::string>(&filterB)->default_value(filterB), "Restrict one of the two views to be this.");
     // clang-format on
 
     CmdLine cmdline("AliceVision exportMatches");
@@ -118,6 +122,7 @@ int aliceVision_main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    //Make sure we have somewhere to write images
     if (outputFolder.empty())
     {
         ALICEVISION_LOG_ERROR("It is an invalid output folder");
@@ -131,9 +136,35 @@ int aliceVision_main(int argc, char** argv)
         ALICEVISION_LOG_ERROR("The input SfMData file '" << sfmDataFilename << "' cannot be read.");
         return EXIT_FAILURE;
     }
+    
+    //Create filters from input parameters
+    IndexT indexFilterA = UndefinedIndexT;
+    IndexT indexFilterB = UndefinedIndexT;
+
+    if (!filterA.empty() || !filterB.empty())
+    {
+        if (!filterA.empty())
+        {
+            indexFilterA = sfmData.findView(filterA);
+            if (indexFilterA == UndefinedIndexT)
+            {
+                ALICEVISION_LOG_ERROR("Could not find corresponding view for: " + filterA);
+                return EXIT_FAILURE;
+            }
+        }
+
+        if (!filterB.empty())
+        {
+            indexFilterB = sfmData.findView(filterB);
+            if (indexFilterB == UndefinedIndexT)
+            {
+                ALICEVISION_LOG_ERROR("Could not find corresponding view for: " + filterB);
+                return EXIT_FAILURE;
+            }
+        }
+    }
 
     // load SfM Scene regions
-
     // get imageDescriberMethodType
     std::vector<EImageDescriberType> describerMethodTypes = EImageDescriberType_stringToEnums(describerTypesName);
 
@@ -164,21 +195,40 @@ int aliceVision_main(int argc, char** argv)
         const std::size_t I = iter->first;
         const std::size_t J = iter->second;
 
-        const View* viewI = sfmData.getViews().at(I).get();
-        const View* viewJ = sfmData.getViews().at(J).get();
 
-        const std::string viewImagePathI = viewI->getImage().getImagePath();
-        const std::string viewImagePathJ = viewJ->getImage().getImagePath();
+        //Apply filter A
+        if (indexFilterA != UndefinedIndexT)
+        {
+            if (I != indexFilterA && J != indexFilterA)
+            {
+                continue;
+            }
+        }
 
-        std::string destFilename_I;
-        std::string destFilename_J;
+        //Apply filter B
+        if (indexFilterB != UndefinedIndexT)
+        {
+            if (I != indexFilterB && J != indexFilterB)
+            {
+                continue;
+            }
+        }
+
+        const View & viewI = sfmData.getView(I);
+        const View & viewJ = sfmData.getView(J);
+
+        const std::string viewImagePathI = viewI.getImage().getImagePath();
+        const std::string viewImagePathJ = viewJ.getImage().getImagePath();
+
+        std::string destFilenameI;
+        std::string destFilenameJ;
         {
             fs::path origImgPath(viewImagePathI);
             std::string origFilename = origImgPath.stem().string();
             image::Image<image::RGBfColor> originalImage;
             image::readImage(viewImagePathI, originalImage, image::EImageColorSpace::LINEAR);
-            destFilename_I = (fs::path(outputFolder) / (origFilename + ".png")).string();
-            image::writeImage(destFilename_I, originalImage, image::ImageWriteOptions().toColorSpace(image::EImageColorSpace::SRGB));
+            destFilenameI = (fs::path(outputFolder) / (origFilename + ".png")).string();
+            image::writeImage(destFilenameI, originalImage, image::ImageWriteOptions().toColorSpace(image::EImageColorSpace::SRGB));
         }
 
         {
@@ -186,24 +236,29 @@ int aliceVision_main(int argc, char** argv)
             std::string origFilename = origImgPath.stem().string();
             image::Image<image::RGBfColor> originalImage;
             image::readImage(viewImagePathJ, originalImage, image::EImageColorSpace::LINEAR);
-            destFilename_J = (fs::path(outputFolder) / (origFilename + ".png")).string();
-            image::writeImage(destFilename_J, originalImage, image::ImageWriteOptions().toColorSpace(image::EImageColorSpace::SRGB));
+            destFilenameJ = (fs::path(outputFolder) / (origFilename + ".png")).string();
+            image::writeImage(destFilenameJ, originalImage, image::ImageWriteOptions().toColorSpace(image::EImageColorSpace::SRGB));
         }
 
-        const std::pair<size_t, size_t> dimImageI = std::make_pair(viewI->getImage().getWidth(), viewI->getImage().getHeight());
-        const std::pair<size_t, size_t> dimImageJ = std::make_pair(viewJ->getImage().getWidth(), viewJ->getImage().getHeight());
+        const std::pair<size_t, size_t> dimImageI = std::make_pair(viewI.getImage().getWidth(), viewI.getImage().getHeight());
+        const std::pair<size_t, size_t> dimImageJ = std::make_pair(viewJ.getImage().getWidth(), viewJ.getImage().getHeight());
 
         svgDrawer svgStream(dimImageI.first + dimImageJ.first, std::max(dimImageI.second, dimImageJ.second));
 
-        svgStream.drawImage(destFilename_I, dimImageI.first, dimImageI.second);
-        svgStream.drawImage(destFilename_J, dimImageJ.first, dimImageJ.second, dimImageI.first);
+        svgStream.drawImage(destFilenameI, dimImageI.first, dimImageI.second);
+        svgStream.drawImage(destFilenameJ, dimImageJ.first, dimImageJ.second, dimImageI.first);
 
+        struct PairInfo
+        {
+            Vec2 first;
+            Vec2 second;
+            feature::EImageDescriberType descType;
+        };
+
+        std::vector<PairInfo> pairs;
         const matching::MatchesPerDescType& filteredMatches = pairwiseMatches.at(*iter);
 
         ALICEVISION_LOG_INFO("nb describer: " << filteredMatches.size());
-
-        if (filteredMatches.empty())
-            continue;
 
         for (const auto& matchesIt : filteredMatches)
         {
@@ -212,8 +267,8 @@ int aliceVision_main(int argc, char** argv)
             const matching::IndMatches& matches = matchesIt.second;
             ALICEVISION_LOG_INFO(EImageDescriberType_enumToString(matchesIt.first) << ": " << matches.size() << " matches");
 
-            const PointFeatures& featuresI = featuresPerView.getFeatures(viewI->getViewId(), descType);
-            const PointFeatures& featuresJ = featuresPerView.getFeatures(viewJ->getViewId(), descType);
+            const PointFeatures& featuresI = featuresPerView.getFeatures(I, descType);
+            const PointFeatures& featuresJ = featuresPerView.getFeatures(J, descType);
 
             // draw link between features :
             for (std::size_t i = 0; i < matches.size(); ++i)
@@ -221,30 +276,45 @@ int aliceVision_main(int argc, char** argv)
                 const PointFeature& imaA = featuresI[matches[i]._i];
                 const PointFeature& imaB = featuresJ[matches[i]._j];
 
-                // compute a flashy colour for the correspondence
-                unsigned char r, g, b;
-                hslToRgb((rand() % 360) / 360., 1.0, .5, r, g, b);
-                std::ostringstream osCol;
-                osCol << "rgb(" << (int)r << ',' << (int)g << ',' << (int)b << ")";
-                svgStream.drawLine(imaA.x(), imaA.y(), imaB.x() + dimImageI.first, imaB.y(), svgStyle().stroke(osCol.str(), 2.0));
-            }
+                PairInfo pi;
 
-            const std::string featColor = describerTypeColor(descType);
-            // draw features (in two loop, in order to have the features upper the link, svg layer order):
-            for (std::size_t i = 0; i < matches.size(); ++i)
-            {
-                const PointFeature& imaA = featuresI[matches[i]._i];
-                const PointFeature& imaB = featuresJ[matches[i]._j];
-                svgStream.drawCircle(imaA.x(), imaA.y(), 5.0, svgStyle().stroke(featColor, 2.0));
-                svgStream.drawCircle(imaB.x() + dimImageI.first, imaB.y(), 5.0, svgStyle().stroke(featColor, 2.0));
+                pi.first = imaA.coords().cast<double>();
+                pi.second = imaB.coords().cast<double>();
+                pi.descType = descType;
+
+                pairs.push_back(pi);
             }
         }
 
-        fs::path outputFilename = fs::path(outputFolder) / std::string(std::to_string(iter->first) + "_" + std::to_string(iter->second) + "_" +
-                                                                       std::to_string(filteredMatches.getNbAllMatches()) + ".svg");
+        if (pairs.empty())
+        {
+            continue;
+        }
+
+        for (const auto & pi : pairs)
+        {
+            // compute a flashy colour for the correspondence
+            unsigned char r, g, b;
+            hslToRgb((rand() % 360) / 360., 1.0, .5, r, g, b);
+            std::ostringstream osCol;
+            osCol << "rgb(" << (int)r << ',' << (int)g << ',' << (int)b << ")";
+            svgStream.drawLine(pi.first.x(), pi.first.y(), pi.second.x() + dimImageI.first, pi.second.y(), svgStyle().stroke(osCol.str(), 2.0));
+        }
+
+        // draw features (in two loop, in order to have the features upper the link, svg layer order):
+        for (const auto & pi : pairs)
+        {
+            const std::string featColor = describerTypeColor(pi.descType);
+            svgStream.drawCircle(pi.first.x(), pi.first.y(), 5.0, svgStyle().stroke(featColor, 2.0));
+            svgStream.drawCircle(pi.second.x() + dimImageI.first, pi.second.y(), 5.0, svgStyle().stroke(featColor, 2.0));
+        }
+
+        fs::path outputFilename = fs::path(outputFolder) / std::string(std::to_string(iter->first) + "_" + std::to_string(iter->second) + "_" +std::to_string(filteredMatches.getNbAllMatches()) + ".svg");
         std::ofstream svgFile(outputFilename.string());
         svgFile << svgStream.closeSvgFile().str();
         svgFile.close();
     }
+
+
     return EXIT_SUCCESS;
 }

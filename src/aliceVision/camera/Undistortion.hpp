@@ -31,30 +31,85 @@ class Undistortion
   public:
     Undistortion(int width, int height)
     {
+        _pixelAspectRatio = 1.0;
+        _isDesqueezed = false;
+        
         setSize(width, height);
         setOffset({0.0, 0.0});
     }
 
-    virtual EDISTORTION getType() const = 0;
+    virtual EUNDISTORTION getType() const = 0;
 
     virtual Undistortion* clone() const = 0;
 
     // not virtual as child classes do not hold any data
     bool operator==(const Undistortion& other) const { return _undistortionParams == other._undistortionParams; }
 
+    void setDesqueezed(bool isDesqueezed)
+    {
+        _isDesqueezed = isDesqueezed;
+
+        double hh = _size.y();
+        if (!_isDesqueezed)
+        { 
+            hh = _size.y() / _pixelAspectRatio;
+        }
+
+        _diagonal = sqrt(_size.x() * _size.x() + hh * hh) * 0.5;
+    }
+
+    bool isDesqueezed() const
+    {
+        return _isDesqueezed;
+    }
+
     void setOffset(const Vec2& offset) { _offset = offset; }
 
     void setSize(int width, int height)
     {
-        _size = {width, height};
-        _diagonal = sqrt(width * width + height * height) * 0.5;
+        
+        double hh = height;
+        if (!_isDesqueezed)
+        {
+            hh = height / _pixelAspectRatio;
+        }
+
+        _diagonal = sqrt(width * width + hh * hh) * 0.5;
         _center = {width / 2, height / 2};
+        _size = {width, height};
+    }
+
+    void setDiagonal(double diagonal)
+    {
+        //May be used for plates with a different size than lens grid
+        _diagonal = diagonal;
+    }
+
+    void setPixelAspectRatio(double pixelAspectRatio) 
+    { 
+        _pixelAspectRatio = pixelAspectRatio; 
+        
+        double hh = _size.y();
+        if (!_isDesqueezed)
+        { 
+            hh = _size.y() / _pixelAspectRatio;
+        }
+
+        _diagonal = sqrt(_size.x() * _size.x() + hh * hh) * 0.5;
     }
 
     inline Vec2 getOffset() const { return _offset; }
 
+    inline Vec2 getScaledOffset() const { return _offset / _diagonal; }
+
     Vec2 getSize() const { return _size; }
 
+    Vec2 getCenter() const { return _center + _offset; }
+
+    inline double getDiagonal() const { return _diagonal; }
+
+    double getPixelAspectRatio() const { return _pixelAspectRatio; }
+    
     const std::vector<double>& getParameters() const { return _undistortionParams; }
 
     void setParameters(const std::vector<double>& params)
@@ -93,6 +148,8 @@ class Undistortion
     Vec2 _center;
     Vec2 _offset;
     double _diagonal;
+    double _pixelAspectRatio;
+    bool _isDesqueezed;
     std::vector<double> _undistortionParams{};
 };
 

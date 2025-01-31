@@ -32,8 +32,6 @@
 
 #include <aliceVision/matching/supportEstimation.hpp>
 
-#include <aliceVision/sfm/bundle/BundleAdjustmentSymbolicCeres.hpp>
-
 #include <dependencies/htmlDoc/htmlDoc.hpp>
 
 #ifdef _MSC_VER
@@ -284,7 +282,7 @@ bool ReconstructionEngine_panorama::process()
     aliceVision::rotationAveraging::RelativeRotations relativesR;
     computeRelativeRotations(relativesR);
 
-    HashMap<IndexT, Mat3> globalRotations;
+    std::map<IndexT, Mat3> globalRotations;
     if (!computeGlobalRotations(relativesR, globalRotations))
     {
         ALICEVISION_LOG_WARNING("Panorama: Rotation Averaging failure!");
@@ -326,7 +324,7 @@ bool ReconstructionEngine_panorama::process()
 
 /// Compute from relative rotations the global rotations of the camera poses
 bool ReconstructionEngine_panorama::computeGlobalRotations(const rotationAveraging::RelativeRotations& relativesR,
-                                                           HashMap<IndexT, Mat3>& globalRotations)
+                                                           std::map<IndexT, Mat3>& globalRotations)
 {
     if (relativesR.empty())
     {
@@ -388,15 +386,15 @@ bool ReconstructionEngine_panorama::computeGlobalRotations(const rotationAveragi
 // Adjust the scene (& remove outliers)
 bool ReconstructionEngine_panorama::adjust()
 {
-    BundleAdjustmentSymbolicCeres::CeresOptions options;
+    BundleAdjustmentCeres::CeresOptions options;
     options.summary = true;
     options.maxNumIterations = 300;
     options.useFocalPrior = false;
     options.useParametersOrdering = false;
 
     // Start bundle with rotation only
-    BundleAdjustmentSymbolicCeres BA(options);
-    bool success = BA.adjust(_sfmData, BundleAdjustmentSymbolicCeres::REFINE_ROTATION);
+    BundleAdjustmentCeres BA(options);
+    bool success = BA.adjust(_sfmData, BundleAdjustmentCeres::REFINE_ROTATION);
     if (success)
     {
         ALICEVISION_LOG_INFO("Rotations successfully refined.");
@@ -415,7 +413,7 @@ bool ReconstructionEngine_panorama::adjust()
 
     if (_params.intermediateRefineWithFocal)
     {
-        success = BA.adjust(_sfmData, BundleAdjustmentSymbolicCeres::REFINE_ROTATION | BundleAdjustmentSymbolicCeres::REFINE_INTRINSICS_FOCAL);
+        success = BA.adjust(_sfmData, BundleAdjustmentCeres::REFINE_ROTATION | BundleAdjustmentCeres::REFINE_INTRINSICS_FOCAL);
         if (success)
         {
             ALICEVISION_LOG_INFO("Bundle successfully refined: Rotation + Focal");
@@ -429,8 +427,8 @@ bool ReconstructionEngine_panorama::adjust()
     if (_params.intermediateRefineWithFocalDist)
     {
         success = BA.adjust(_sfmData,
-                            BundleAdjustmentSymbolicCeres::REFINE_ROTATION | BundleAdjustmentSymbolicCeres::REFINE_INTRINSICS_FOCAL |
-                              BundleAdjustmentSymbolicCeres::REFINE_INTRINSICS_DISTORTION);
+                            BundleAdjustmentCeres::REFINE_ROTATION | BundleAdjustmentCeres::REFINE_INTRINSICS_FOCAL |
+                              BundleAdjustmentCeres::REFINE_INTRINSICS_DISTORTION);
         if (success)
         {
             ALICEVISION_LOG_INFO("Bundle successfully refined: Rotation + Focal + Distortion");
@@ -444,9 +442,9 @@ bool ReconstructionEngine_panorama::adjust()
 
     // Minimize All
     success = BA.adjust(_sfmData,
-                        BundleAdjustmentSymbolicCeres::REFINE_ROTATION | BundleAdjustmentSymbolicCeres::REFINE_INTRINSICS_FOCAL |
-                          BundleAdjustmentSymbolicCeres::REFINE_INTRINSICS_DISTORTION |
-                          BundleAdjustmentSymbolicCeres::REFINE_INTRINSICS_OPTICALOFFSET_ALWAYS);
+                        BundleAdjustmentCeres::REFINE_ROTATION | BundleAdjustmentCeres::REFINE_INTRINSICS_FOCAL |
+                          BundleAdjustmentCeres::REFINE_INTRINSICS_DISTORTION |
+                          BundleAdjustmentCeres::REFINE_INTRINSICS_OPTICALOFFSET_ALWAYS);
     if (success)
     {
         ALICEVISION_LOG_INFO("Bundle successfully refined: Rotation + Focal + Optical Center + Distortion");
@@ -471,7 +469,7 @@ bool ReconstructionEngine_panorama::adjust()
         addConstraints2DWithKnownRotation();
 
         // Minimize Rotation
-        success = BA.adjust(_sfmData, BundleAdjustmentSymbolicCeres::REFINE_ROTATION);
+        success = BA.adjust(_sfmData, BundleAdjustmentCeres::REFINE_ROTATION);
         if (success)
         {
             ALICEVISION_LOG_INFO("Bundle successfully refined: Rotation after cleaning outliers");
@@ -917,12 +915,12 @@ bool ReconstructionEngine_panorama::buildLandmarks()
         const sfmData::View& v1 = _sfmData.getView(c.ViewFirst);
         const std::shared_ptr<camera::IntrinsicBase> cam1 = _sfmData.getIntrinsicSharedPtr(v1.getIntrinsicId());
         const sfmData::CameraPose pose1 = _sfmData.getPose(v1);
-        const Vec3 wpt1 = cam1->backproject(c.ObservationFirst.getCoordinates(), true, pose1.getTransform(), 1.0);
+        const Vec3 wpt1 = cam1->backprojectTransform(c.ObservationFirst.getCoordinates(), true, pose1.getTransform(), 1.0);
 
         const sfmData::View& v2 = _sfmData.getView(c.ViewSecond);
         const std::shared_ptr<camera::IntrinsicBase> cam2 = _sfmData.getIntrinsicSharedPtr(v2.getIntrinsicId());
         const sfmData::CameraPose pose2 = _sfmData.getPose(v2);
-        const Vec3 wpt2 = cam2->backproject(c.ObservationSecond.getCoordinates(), true, pose2.getTransform(), 1.0);
+        const Vec3 wpt2 = cam2->backprojectTransform(c.ObservationSecond.getCoordinates(), true, pose2.getTransform(), 1.0);
 
         // Store landmark
         Landmark l;

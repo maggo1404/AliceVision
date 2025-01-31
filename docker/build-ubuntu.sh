@@ -6,10 +6,10 @@ test -e docker/fetch.sh || {
 	exit 1
 }
 
-test -z "$AV_DEPS_VERSION" && AV_DEPS_VERSION=2023.12.13
+test -z "$AV_DEPS_VERSION" && AV_DEPS_VERSION=2025.01.06
 test -z "$AV_VERSION" && AV_VERSION="$(git rev-parse --abbrev-ref HEAD)-$(git rev-parse --short HEAD)"
-test -z "$CUDA_VERSION" && CUDA_VERSION=11.3.1
-test -z "$UBUNTU_VERSION" && UBUNTU_VERSION=20.04
+test -z "$CUDA_VERSION" && CUDA_VERSION=12.1.1
+test -z "$UBUNTU_VERSION" && UBUNTU_VERSION=22.04
 test -z "$REPO_OWNER" && REPO_OWNER=alicevision
 test -z "$DOCKER_REGISTRY" && DOCKER_REGISTRY=docker.io
 

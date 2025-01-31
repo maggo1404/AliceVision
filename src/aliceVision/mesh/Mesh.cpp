@@ -6,6 +6,7 @@
 
 #include "Mesh.hpp"
 #include <aliceVision/system/Logger.hpp>
+#include <aliceVision/utils/filesIO.hpp>
 #include <aliceVision/mesh/meshVisibility.hpp>
 #include <aliceVision/mvsData/geometry.hpp>
 #include <aliceVision/mvsData/OrientedPoint.hpp>
@@ -70,8 +71,7 @@ EFileType EFileType_stringToEnum(const std::string& meshFileType)
 std::ostream& operator<<(std::ostream& os, EFileType meshFileType) { return os << EFileType_enumToString(meshFileType); }
 std::istream& operator>>(std::istream& in, EFileType& meshFileType)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     meshFileType = EFileType_stringToEnum(token);
     return in;
 }
@@ -2359,7 +2359,7 @@ void Mesh::load(const std::string& filepath, bool mergeCoincidentVerts, Material
     normals.clear();
     pointsVisibilities.clear();
 
-    if (!std::filesystem::exists(filepath))
+    if (!utils::exists(filepath))
     {
         ALICEVISION_THROW_ERROR("Mesh::load: no such file: " << filepath);
     }

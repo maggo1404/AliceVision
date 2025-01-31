@@ -78,7 +78,7 @@ void test_panorama(std::shared_ptr<camera::IntrinsicBase>& intrinsic_gt,
                     continue;
                 }
 
-                Vec2 im = intrinsic_gt->project(pose, pt.homogeneous(), true);
+                Vec2 im = intrinsic_gt->transformProject(pose, pt.homogeneous(), true);
                 double dice = dist(mt);
                 if (dice < ratio_inliers)
                 {

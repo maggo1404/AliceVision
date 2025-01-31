@@ -90,10 +90,10 @@ void getTracksIdVector(const TracksMap& tracks, std::set<std::size_t>* tracksIds
  * @param[in] allTracks all tracks of the scene as a map {trackId, track}
  * @param[in] trackIds the tracks in the images
  * @param[in] viewId: ImageId we are looking for features
- * @param[out] out_featId the number of features in the image as a vector
+ * @param[out] outFeatId the number of features in the image as a vector
  * @return true if the vector of features Ids is not empty
  */
-bool getFeatureIdInViewPerTrack(const TracksMap& allTracks, const std::set<std::size_t>& trackIds, IndexT viewId, std::vector<FeatureId>* out_featId);
+bool getFeatureIdInViewPerTrack(const TracksMap& allTracks, const std::set<std::size_t>& trackIds, IndexT viewId, std::vector<FeatureId>& outFeatId);
 
 struct FunctorMapFirstEqual
 {
@@ -108,17 +108,17 @@ struct FunctorMapFirstEqual
 /**
  * @brief Convert a trackId to a vector of indexed Matches.
  *
- * @param[in]  map_tracks: set of tracks with only 2 elements
+ * @param[in]  tracks: set of tracks with only 2 elements
  *             (image A and image B) in each Track.
- * @param[in]  vec_filterIndex: the track indexes to retrieve.
+ * @param[in]  filterIndex: the track indexes to retrieve.
  *             Only track indexes contained in this filter vector are kept.
- * @param[out] pvec_index: list of matches
+ * @param[out] outIndex: list of matches
  *             (feature index in image A, feature index in image B).
  *
  * @warning The input tracks must be composed of only two images index.
  * @warning Image index are considered sorted (increasing order).
  */
-void tracksToIndexedMatches(const TracksMap& tracks, const std::vector<IndexT>& filterIndex, std::vector<IndMatch>* out_index);
+void tracksToIndexedMatches(const TracksMap& tracks, const std::vector<IndexT>& filterIndex, std::vector<IndMatch>* outIndex);
 
 /**
  * @brief Return the occurrence of tracks length.
@@ -140,6 +140,14 @@ void imageIdInTracks(const TracksPerView& tracksPerView, std::set<std::size_t>& 
  * @param[out] imagesId set of images considered in the tracks container.
  */
 void imageIdInTracks(const TracksMap& tracks, std::set<std::size_t>& imagesId);
+
+
+/**
+ * @brief compute the set of pairs of views which shares some observed features
+ * @param covisibility a map indexed by pair of views and whose values are the number of shared features
+ * @param mapTracks the input tracks map
+*/
+void computeCovisibility(std::map<Pair, unsigned int>& covisibility, const track::TracksMap& mapTracks);
 
 }  // namespace track
 }  // namespace aliceVision

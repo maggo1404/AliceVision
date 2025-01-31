@@ -27,7 +27,9 @@ option(AV_BUILD_COINUTILS "Enable building an embedded CoinUtils" ON)
 option(AV_BUILD_OSI "Enable building an embedded Osi" ON)
 option(AV_BUILD_CLP "Enable building an embedded Clp" ON)
 option(AV_BUILD_FLANN "Enable building an embedded Flann" ON)
+option(AV_BUILD_NANOFLANN "Enable building an embedded NanoFlann" ON)
 option(AV_BUILD_LEMON "Enable building an embedded LEMON library" ON)
+option(AV_BUILD_E57FORMAT "Enable building an embedded E57Format" ON)
 option(AV_BUILD_PCL "Enable building an embedded PointCloud library" OFF)
 option(AV_BUILD_USD "Enable building an embedded USD library" OFF)
 option(AV_BUILD_GEOGRAM "Enable building an embedded Geogram library" ON)
@@ -39,6 +41,8 @@ option(AV_BUILD_ALEMBIC "Enable building an embedded Alembic library" ON)
 option(AV_BUILD_OPENIMAGEIO "Enable building an embedded OpenImageIO library" ON)
 option(AV_BUILD_BOOST "Enable building an embedded Boost library" ON)
 option(AV_BUILD_CERES "Enable building an embedded Ceres library" ON)
+option(AV_BUILD_SWIG "Enable building an embedded SWIG library" ON)
+option(AV_BUILD_OPENMESH "Enable building an embedded OpenMesh library" ON)
 
 if(AV_BUILD_DEPENDENCIES_PARALLEL EQUAL 0)
     cmake_host_system_information(RESULT AV_BUILD_DEPENDENCIES_PARALLEL QUERY NUMBER_OF_LOGICAL_CORES)
@@ -72,9 +76,11 @@ message(STATUS "AV_BUILD_COINUTILS: ${AV_BUILD_COINUTILS}")
 message(STATUS "AV_BUILD_OSI: ${AV_BUILD_OSI}")
 message(STATUS "AV_BUILD_CLP: ${AV_BUILD_CLP}")
 message(STATUS "AV_BUILD_FLANN: ${AV_BUILD_FLANN}")
+message(STATUS "AV_BUILD_NANOFLANN: ${AV_BUILD_NANOFLANN}")
 message(STATUS "AV_BUILD_PCL: ${AV_BUILD_PCL}")
 message(STATUS "AV_BUILD_USD: ${AV_BUILD_USD}")
 message(STATUS "AV_BUILD_LEMON: ${AV_BUILD_LEMON}")
+message(STATUS "AV_BUILD_E57FORMAT: ${AV_BUILD_E57FORMAT}")
 message(STATUS "AV_BUILD_GEOGRAM: ${AV_BUILD_GEOGRAM}")
 message(STATUS "AV_BUILD_TBB ${AV_BUILD_TBB}")
 message(STATUS "AV_BUILD_EIGEN ${AV_BUILD_EIGEN}")
@@ -84,6 +90,8 @@ message(STATUS "AV_BUILD_BOOST ${AV_BUILD_BOOST}")
 message(STATUS "AV_BUILD_ALEMBIC ${AV_BUILD_ALEMBIC}")
 message(STATUS "AV_BUILD_OPENIMAGEIO ${AV_BUILD_OPENIMAGEIO}")
 message(STATUS "AV_BUILD_CERES ${AV_BUILD_CERES}")
+message(STATUS "AV_BUILD_SWIG ${AV_BUILD_SWIG}")
+message(STATUS "AV_BUILD_OPENMESH ${AV_BUILD_OPENMESH}")
 message(STATUS "AV_BUILD_DEPENDENCIES_PARALLEL: ${AV_BUILD_DEPENDENCIES_PARALLEL}")
 ##########END LOGGING#########"
 
@@ -104,8 +112,8 @@ if(AV_BUILD_ZLIB)
     set(ZLIB_TARGET zlib)
 
     ExternalProject_Add(${ZLIB_TARGET}
-        URL http://www.zlib.net/zlib-1.3.tar.gz
-        URL_HASH SHA256=ff0ba4c292013dbc27530b3a81e1f9a813cd39de01ca5e0f8bf355702efa593e
+        URL https://www.zlib.net/zlib-1.3.1.tar.gz
+        URL_HASH SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
         DOWNLOAD_DIR ${BUILD_DIR}/download/zlib
         PREFIX ${BUILD_DIR}
         BUILD_IN_SOURCE 0
@@ -168,8 +176,8 @@ if(AV_BUILD_GEOGRAM)
     set(GEOGRAM_TARGET geogram)
 
     ExternalProject_Add(${GEOGRAM_TARGET}
-        URL https://github.com/BrunoLevy/geogram/releases/download/v1.8.3/geogram_1.8.3.tar.gz
-        URL_HASH MD5=06fa5a70c05830d103ff71c55da5bb53
+        URL https://github.com/BrunoLevy/geogram/releases/download/v1.8.8/geogram_1.8.8.tar.gz
+        URL_HASH MD5=e66563683fad771ef19fdf8b42c8b2a4
         DOWNLOAD_DIR ${BUILD_DIR}/download/geogram
         PREFIX ${BUILD_DIR}
         BUILD_IN_SOURCE 0
@@ -325,7 +333,7 @@ if (AV_BUILD_ONNXRUNTIME)
     ##!/usr/bin/env bash
     # AV_ONNX_VERSION="1.12.0"
     # BASE_URL="https://github.com/microsoft/onnxruntime/releases/download/v${AV_ONNX_VERSION}"
-    # platforms=("onnxruntime-linux-x64"  "onnxruntime-osx-arm64"  "onnxruntime-osx-x86_64")
+    # platforms=("onnxruntime-linux-x64"  "onnxruntime-osx-arm64"  "onnxruntime-osx-x86_64" "onnxruntime-linux-aarch64")
     # # Iterate over the main options
     # for platform in "${platforms[@]}"; do
     #     AV_ONNX_FILENAME="${platform}-${AV_ONNX_VERSION}.tgz"
@@ -344,8 +352,14 @@ if (AV_BUILD_ONNXRUNTIME)
             message(FATAL_ERROR "Unsupported arch version ${AV_ONNX_APPLE_ARCH} for Apple")
         endif()
     else()
-        set(AV_ONNX_FILENAME_PREFIX "onnxruntime-linux-x64")
-        set(AV_ONNX_HASH "5d503ce8540358b59be26c675e42081be14a3e833a5301926f555451046929c5")
+        string(FIND "${CMAKE_HOST_SYSTEM_PROCESSOR}" "aarch64" POSITION)
+        if(NOT POSITION EQUAL -1)
+            set(AV_ONNX_FILENAME_PREFIX "onnxruntime-linux-aarch64")
+            set(AV_ONNX_HASH "5820d9f343df73c63b6b2b174a1ff62575032e171c9564bcf92060f46827d0ac")
+        else()        
+            set(AV_ONNX_FILENAME_PREFIX "onnxruntime-linux-x64")
+            set(AV_ONNX_HASH "5d503ce8540358b59be26c675e42081be14a3e833a5301926f555451046929c5")
+        endif()
     endif()
 
     set(AV_ONNX_FILENAME "${AV_ONNX_FILENAME_PREFIX}-${AV_ONNX_VERSION}.tgz")
@@ -606,8 +620,8 @@ if(AV_BUILD_BOOST)
     endif()
     
     ExternalProject_Add(${BOOST_TARGET}
-        URL https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
-        URL_HASH MD5=df7dc2fc6de751753198a5bf70210da7
+        URL https://archives.boost.io/release/1.84.0/source/boost_1_84_0.tar.bz2
+        URL_HASH MD5=9dcd632441e4da04a461082ebbafd337
         DOWNLOAD_DIR ${BUILD_DIR}/download/boost
         PREFIX ${BUILD_DIR}
         BUILD_IN_SOURCE 0
@@ -616,15 +630,15 @@ if(AV_BUILD_BOOST)
         SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/boost
         BINARY_DIR ${BUILD_DIR}/boost_build
         INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
-        CONFIGURE_COMMAND 
-            cd <SOURCE_DIR> && 
-            ./bootstrap.${SCRIPT_EXTENSION} --prefix=<INSTALL_DIR> --with-libraries=atomic,container,date_time,exception,filesystem,graph,iostreams,json,log,math,program_options,regex,serialization,system,test,thread,stacktrace,timer
-        BUILD_COMMAND 
-            cd <SOURCE_DIR> && 
-            ./b2 --prefix=<INSTALL_DIR> variant=${DEPS_CMAKE_BUILD_TYPE_LOWERCASE} cxxstd=11 link=shared threading=multi -j8
-        INSTALL_COMMAND 
-            cd <SOURCE_DIR> && 
-            ./b2 variant=${DEPS_CMAKE_BUILD_TYPE_LOWERCASE}  cxxstd=11 link=shared threading=multi install
+        CONFIGURE_COMMAND
+            cd <SOURCE_DIR> &&
+            ./bootstrap.${SCRIPT_EXTENSION} --prefix=<INSTALL_DIR> --with-libraries=atomic,container,date_time,exception,graph,iostreams,json,log,math,program_options,regex,serialization,system,test,thread,stacktrace,timer
+        BUILD_COMMAND
+            cd <SOURCE_DIR> &&
+            ./b2 --prefix=<INSTALL_DIR> variant=${DEPS_CMAKE_BUILD_TYPE_LOWERCASE} cxxstd=17 link=shared threading=multi -j8
+        INSTALL_COMMAND
+            cd <SOURCE_DIR> &&
+            ./b2 variant=${DEPS_CMAKE_BUILD_TYPE_LOWERCASE} cxxstd=17 link=shared threading=multi install
         DEPENDS ${ZLIB_TARGET}
     )
 
@@ -674,6 +688,9 @@ if(AV_BUILD_FFMPEG)
         BUILD_COMMAND $(MAKE) -j${AV_BUILD_DEPENDENCIES_PARALLEL}
         DEPENDS ${VPX_TARGET}
     )
+
+    set(FFMPEG_CMAKE_FLAGS -DCMAKE_PREFIX_PATH=${CMAKE_INSTALL_PREFIX};${CMAKE_PREFIX_PATH})
+    
 endif()
 
 if(AV_BUILD_FLANN)
@@ -727,6 +744,34 @@ if(AV_BUILD_FLANN)
     )
 
     set(FLANN_CMAKE_FLAGS -Dflann_DIR:PATH=${CMAKE_INSTALL_PREFIX}/lib/cmake/flann/)
+endif()
+
+if(AV_BUILD_NANOFLANN)
+    set(NANOFLANN_TARGET nanoflann)
+    ExternalProject_Add(${NANOFLANN_TARGET}
+        GIT_REPOSITORY https://github.com/jlblancoc/nanoflann
+        GIT_TAG 419c26c498d12231817ada6488e2fd2442dbc68d
+        PREFIX ${BUILD_DIR}
+        BUILD_IN_SOURCE 0
+        BUILD_ALWAYS 0
+        UPDATE_COMMAND ""
+        SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/${NANOFLANN_TARGET}
+        BINARY_DIR ${BUILD_DIR}/${NANOFLANN_TARGET}_build
+        INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
+        CONFIGURE_COMMAND 
+            ${CMAKE_COMMAND} -E env PKG_CONFIG_PATH=${CMAKE_INSTALL_PREFIX}/lib64/pkgconfig/
+            ${CMAKE_COMMAND} 
+            ${CMAKE_CORE_BUILD_FLAGS}
+            -DNANOFLANN_BUILD_EXAMPLES=OFF
+            -DNANOFLANN_BUILD_TESTS=OFF
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR> <SOURCE_DIR>
+            -DCMAKE_INSTALL_LIBDIR=lib
+        BUILD_COMMAND $(MAKE) -j${AV_BUILD_DEPENDENCIES_PARALLEL}
+        INSTALL_COMMAND $(MAKE) -j${AV_BUILD_DEPENDENCIES_PARALLEL} install
+        DEPENDS ${LZ4_TARGET}
+    )
+
+    set(NANOFLANN_CMAKE_FLAGS -Dflann_DIR:PATH=${CMAKE_INSTALL_PREFIX}/lib/cmake/nanoflann/)
 endif()
 
 if(AV_BUILD_PCL)
@@ -962,7 +1007,7 @@ if(AV_BUILD_OPENCV)
             ${CMAKE_COMMAND} 
             ${CMAKE_CORE_BUILD_FLAGS}
             -DOPENCV_EXTRA_MODULES_PATH=${CMAKE_CURRENT_BINARY_DIR}/opencv_contrib/modules
-            ${ZLIB_CMAKE_FLAGS} ${TBB_CMAKE_FLAGS}
+            ${ZLIB_CMAKE_FLAGS} ${TBB_CMAKE_FLAGS} ${FFMPEG_CMAKE_FLAGS}
             ${TIFF_CMAKE_FLAGS} ${PNG_CMAKE_FLAGS} ${JPEG_CMAKE_FLAGS} ${LIBRAW_CMAKE_FLAGS}
             -DWITH_TBB=ON
             -DWITH_FFMPEG=${AV_BUILD_FFMPEG}
@@ -1005,7 +1050,7 @@ if(AV_BUILD_CCTAG)
 
     ExternalProject_Add(${CCTAG_TARGET}
         GIT_REPOSITORY https://github.com/alicevision/CCTag
-        GIT_TAG v1.0.3
+        GIT_TAG v1.0.4
         PREFIX ${BUILD_DIR}
         BUILD_IN_SOURCE 0
         BUILD_ALWAYS 0
@@ -1071,8 +1116,8 @@ if(AV_BUILD_OPENIMAGEIO)
     set(OPENIMAGEIO_TARGET openimageio)
 
     ExternalProject_Add(${OPENIMAGEIO_TARGET}
-        URL https://github.com/AcademySoftwareFoundation/OpenImageIO/archive/refs/tags/v2.4.13.0.tar.gz
-        URL_HASH MD5=30e8b433bb71a262a51f56a41fc50ac7
+        URL https://github.com/AcademySoftwareFoundation/OpenImageIO/archive/refs/tags/v2.5.8.0.tar.gz
+        URL_HASH MD5=1da1065711ad29fb123d2f21a12f72cc
         DOWNLOAD_DIR ${BUILD_DIR}/download/oiio
         PREFIX ${BUILD_DIR}
         BUILD_IN_SOURCE 0
@@ -1099,7 +1144,7 @@ if(AV_BUILD_OPENIMAGEIO)
             -DUSE_OPENEXR=${AV_BUILD_OPENEXR}
             -DUSE_TIFF=${AV_BUILD_TIFF}
             -DUSE_PNG=${AV_BUILD_PNG}
-            -DUSE_PYTHON=OFF -DUSE_OPENCV=OFF -DUSE_OPENGL=OFF
+            -DUSE_PYTHON=OFF -DUSE_OPENCV=OFF -DUSE_OPENGL=OFF -DUSE_NUKE=OFF -DUSE_PTEX=OFF -DBUILD_DOCS=OFF -DBUILD_TESTING=OFF
             # TODO: build with libheif
         BUILD_COMMAND $(MAKE) -j${AV_BUILD_DEPENDENCIES_PARALLEL}
         DEPENDS ${BOOST_TARGET} ${OPENEXR_TARGET} ${TIFF_TARGET} ${PNG_TARGET} ${JPEG_TARGET} ${LIBRAW_TARGET} ${ZLIB_TARGET} ${FFMPEG_TARGET}
@@ -1244,6 +1289,80 @@ if(AV_BUILD_LEMON)
     set(LEMON_CMAKE_FLAGS -DLEMON_DIR:PATH=${CMAKE_INSTALL_PREFIX}/share/lemon/cmake)
 endif()
 
+if(AV_BUILD_SWIG)
+    set(SWIG_TARGET SWIG)
+
+    ExternalProject_Add(${SWIG_TARGET}
+        GIT_REPOSITORY https://github.com/swig/swig
+        GIT_TAG v4.3.0
+        DOWNLOAD_DIR ${BUILD_DIR}/download/${SWIG_TARGET}
+        PREFIX ${BUILD_DIR}
+        BUILD_IN_SOURCE 0
+        BUILD_ALWAYS 0
+        UPDATE_COMMAND ""
+        SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/${SWIG_TARGET}
+        BINARY_DIR ${BUILD_DIR}/${SWIG_TARGET}_build
+        INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
+        CONFIGURE_COMMAND ${CMAKE_COMMAND}
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR> <SOURCE_DIR>
+        BUILD_COMMAND $(MAKE) -j${AV_BUILD_DEPENDENCIES_PARALLEL}
+    )
+
+    set(SWIG_CMAKE_FLAGS
+        -DSWIG_DIR=${CMAKE_INSTALL_PREFIX}/share/swig/4.3.0
+        -DSWIG_EXECUTABLE=${CMAKE_INSTALL_PREFIX}/bin-deps
+    )
+endif()
+
+if(AV_BUILD_E57FORMAT)
+    # Add libE57Format
+    set(E57FORMAT_TARGET E57Format)
+
+    ExternalProject_add(${E57FORMAT_TARGET}
+        GIT_REPOSITORY https://github.com/asmaloney/libE57Format.git
+        GIT_TAG v3.1.1
+        DOWNLOAD_DIR ${BUILD_DIR}/download/${E57FORMAT_TARGET}
+        PREFIX ${BUILD_DIR}
+        BUILD_IN_SOURCE 0
+        BUILD_ALWAYS 0
+        UPDATE_COMMAND ""
+        SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/${E57FORMAT_TARGET}
+        BINARY_DIR ${BUILD_DIR}/${E57FORMAT_TARGET}_build
+        INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
+        CONFIGURE_COMMAND ${CMAKE_COMMAND}
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR> <SOURCE_DIR>
+        BUILD_COMMAND $(MAKE) -j${AV_BUILD_DEPENDENCIES_PARALLEL}
+    )
+
+    set(E57FORMAT_CMAKE_FLAGS -DE57FORMAT_DIR:PATH=${CMAKE_INSTALL_PREFIX}/share/E57Format)
+endif()
+
+if(AV_BUILD_OPENMESH)
+    # Add openmesh
+    set(OPENMESH_TARGET OpenMesh)
+
+    ExternalProject_add(${OPENMESH_TARGET}
+        URL https://www.graphics.rwth-aachen.de/media/openmesh_static/Releases/10.0/OpenMesh-10.0.0.tar.bz2
+        URL_HASH MD5=4d166aecbc09df58b38de9759c92a437
+        DOWNLOAD_DIR ${BUILD_DIR}/download/${OPENMESH_TARGET}
+        PREFIX ${BUILD_DIR}
+        BUILD_IN_SOURCE 0
+        BUILD_ALWAYS 0
+        UPDATE_COMMAND ""
+        SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/${OPENMESH_TARGET}
+        BINARY_DIR ${BUILD_DIR}/${OPENMESH_TARGET}_build
+        INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
+        CONFIGURE_COMMAND ${CMAKE_COMMAND}
+            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR> <SOURCE_DIR>
+            -DBUILD_APPS=OFF
+            -DOPENMESH_DOCS=OFF
+        BUILD_COMMAND $(MAKE) -j${AV_BUILD_DEPENDENCIES_PARALLEL}
+    )
+
+    set(OPENMESH_CMAKE_FLAGS -DOPENMESH_DIR:PATH=${CMAKE_INSTALL_PREFIX}/share/OpenMesh/cmake)
+endif()
+
 set(AV_DEPS
     ${ZLIB_TARGET}
     ${ASSIMP_TARGET}
@@ -1274,8 +1393,12 @@ set(AV_DEPS
     ${CLP_TARGET}
     ${USD_TARGET}
     ${FLANN_TARGET}
+    ${NANOFLANN_TARGET}
     ${LZ4_TARGET}
     ${LEMON_TARGET}
+    ${SWIG_TARGET}
+    ${E57FORMAT_TARGET}
+    ${OPENMESH_TARGET}
 )
 
 if(AV_BUILD_ALICEVISION)
@@ -1298,8 +1421,8 @@ if(AV_BUILD_ALICEVISION)
         -DALICEVISION_USE_OPENGV=${AV_BUILD_OPENGV}
         -DALICEVISION_USE_POPSIFT=${AV_BUILD_POPSIFT}
         -DALICEVISION_USE_CUDA=${AV_USE_CUDA}
+        -DALICEVISION_BUILD_SWIG_BINDING=${AV_USE_SWIG}
         -DALICEVISION_BUILD_DOC=OFF
-        -DALICEVISION_BUILD_EXAMPLES=OFF
 
         ${ZLIB_CMAKE_FLAGS}
         ${ASSIMP_CMAKE_FLAGS}
@@ -1321,8 +1444,12 @@ if(AV_BUILD_ALICEVISION)
         ${COINUTILS_CMAKE_FLAGS} ${OSI_CMAKE_FLAGS} ${CLP_CMAKE_FLAGS}
         ${LZ4_CMAKE_FLAGS}
         ${FLANN_CMAKE_FLAGS}
+        ${NANOFLANN_CMAKE_FLAGS}
         ${PCL_CMAKE_FLAGS}
         ${USD_CMAKE_FLAGS}
+        ${SWIG_CMAKE_FLAGS}
+        ${E57FORMAT_CMAKE_FLAGS}
+        ${OPENMESH_CMAKE_FLAGS}
 
         -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR> <SOURCE_DIR>
         DEPENDS ${AV_DEPS}

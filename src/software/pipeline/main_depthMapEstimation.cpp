@@ -18,7 +18,6 @@
 #include <aliceVision/gpu/gpu.hpp>
 
 #include <boost/program_options.hpp>
-#include <boost/filesystem.hpp>
 
 // These constants define the current software version.
 // They must be updated when the command line is changed.
@@ -297,7 +296,7 @@ int aliceVision_main(int argc, char* argv[])
     }
 
     // MultiViewParams initialization
-    mvsUtils::MultiViewParams mp(sfmData, imagesFolder, outputFolder, "", false, downscale);
+    mvsUtils::MultiViewParams mp(sfmData, imagesFolder, outputFolder, "", mvsUtils::EFileType::none, downscale);
 
     // set MultiViewParams min/max view angle
     mp.setMinViewAngle(minViewAngle);

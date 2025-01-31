@@ -30,9 +30,11 @@ AliceVision depends on external libraries:
 * [Eigen >= 3.3.4](https://gitlab.com/libeigen/eigen)
 * [Expat >= 2.4.8](https://libexpat.github.io/)
 * Flann >= 1.8.4, use [our fork](https://github.com/alicevision/flann) with a CMake build system
-* [Geogram >= 1.7.5](https://github.com/BrunoLevy/geogram)
+* [Geogram >= 1.7.5 (recommended >= 1.8.8)](https://github.com/BrunoLevy/geogram)
+* [nanoflann >= 1.5.4](https://github.com/jlblancoc/nanoflann)
 * [OpenEXR >= 2.5](https://github.com/AcademySoftwareFoundation/openexr)
 * [OpenImageIO >= 2.1.0 (recommended >= 2.4.13)](https://github.com/OpenImageIO/oiio)
+* [OpenMesh >= 9.0](https://www.graphics.rwth-aachen.de/software/openmesh/)
 * Open Solver Interface (Osi) >= 0.106.10 use [our fork](https://github.com/alicevision/Osi)) with a CMake build system
 * [zlib](https://www.zlib.net)
 
@@ -50,11 +52,12 @@ Other optional libraries can enable specific features (check "CMake Options" for
 * PopSift (feature extraction on GPU)
 * UncertaintyTE (Uncertainty computation)
 * Lemon >= 1.3
+* libe57format (support reading .e57 files)
+
 
 AliceVision also depends on some embedded libraries:
 
 * MeshSDFilter (internal)
-* OpenMesh (internal)
 
 
 
@@ -81,8 +84,10 @@ cd <VCPKG_INSTALL_DIR>
 set VCPKG_ROOT=%cd%
 
 vcpkg install ^
-          boost-algorithm boost-accumulators boost-atomic boost-container boost-date-time boost-exception boost-geometry boost-graph boost-json boost-log ^
-          boost-program-options boost-property-tree boost-ptr-container boost-regex boost-serialization boost-system boost-test boost-thread boost-timer ^
+          boost-algorithm boost-accumulators boost-atomic boost-container boost-date-time boost-exception ^
+          boost-geometry boost-graph boost-json boost-log boost-program-options boost-property-tree ^
+          boost-ptr-container boost-regex boost-serialization boost-system boost-test boost-thread boost-timer ^
+          boost-format ^
           lz4 ^
           liblemon ^
           openexr ^
@@ -90,16 +95,18 @@ vcpkg install ^
           geogram ^
           eigen3 ^
           expat ^
-          flann ^
+          flann nanoflann ^
           onnxruntime-gpu ^
           opencv[eigen,ffmpeg,webp,contrib,nonfree,cuda] ^
-          openimageio[libraw,ffmpeg,freetype,opencv,gif,openjpeg,webp] ^
+          openimageio[opencolorio,pybind11,libraw,ffmpeg,freetype,opencv,gif,openjpeg,webp] ^
+          openmesh ^
           ceres[suitesparse,cxsparse] ^
           cuda ^
           tbb ^
           assimp ^
           pcl ^
           clp ^
+          libe57format ^
           --triplet x64-windows
 ```
 
@@ -247,9 +254,6 @@ CMake Options
 * `ALICEVISION_BUILD_DOC` (default `AUTO`)
   Build AliceVision documentation
 
-* `ALICEVISION_BUILD_EXAMPLES` (default `ON`)
-  Build AliceVision samples applications (aliceVision software are still built)
-
 * `ALICEVISION_BUILD_COVERAGE` (default `OFF`)
   Enable code coverage generation (gcc only)
 
@@ -272,9 +276,9 @@ Linux compilation
  cmake -DCMAKE_BUILD_TYPE=Release . ../AliceVision
 ```
 
-If you want enable unit tests and examples to the build:
+If you want enable unit tests to the build:
 ```bash
-cmake -DCMAKE_BUILD_TYPE=Release -DALICEVISION_BUILD_TESTS=ON -DALICEVISION_BUILD_EXAMPLES=ON ../AliceVision
+cmake -DCMAKE_BUILD_TYPE=Release -DALICEVISION_BUILD_TESTS=ON ../AliceVision
 ```
 
 In order to use the MOSEK 6 back-end for the linear programming aliceVision module:
@@ -336,11 +340,10 @@ git clone --recursive https://github.com/alicevision/AliceVision.git
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -G "Xcode" ../AliceVision
 ```
-If you want enable unit tests and examples to the build:
+If you want enable unit tests to the build:
 ```bash
 cmake -DCMAKE_BUILD_TYPE=Release \
       -DALICEVISION_BUILD_TESTS=ON \
-      -DALICEVISION_BUILD_EXAMPLES=ON \
       -G "Xcode" \
       ../AliceVision
 xcodebuild -configuration Release
@@ -381,33 +384,33 @@ Check the sample in [samples](src/samples/aliceVisionAs3rdParty) for an example 
 
 ### Docker image
 
-A docker image can be built using the CentOS or Ubuntu Dockerfiles.
+A docker image can be built using the Ubuntu or Rocky Linux Dockerfiles.
 The Dockerfiles are based on `nvidia/cuda` images (https://hub.docker.com/r/nvidia/cuda/)
 
 To generate the docker image, just run:
 ```
-./docker/build-centos.sh
+./docker/build-rocky.sh
 ```
 
-To do it manually, parameters `OS_TAG` and `CUDA_TAG` should be passed to choose the OS and CUDA version.
-For example, the first line of below's commands shows the example to create docker for a CentOS 7 with Cuda 11.3.1 and second line for Ubuntu 16.04 with Cuda 11.0:
+To do it manually, parameters `ROCKY_VERSION`/`UBUNTU_VERSION` and `CUDA_TAG` should be passed to choose the OS and CUDA versions.
+For example, the first line of the commands below shows the example to create docker for a Rocky 9 with Cuda 12.1.0 and the second line for Ubuntu 16.04 with Cuda 11.0:
 
 ```
-docker build --build-arg OS_TAG=7 --build-arg CUDA_TAG=11.3.1 --tag alicevision:centos7-cuda11.3.1 .
-docker build --build-arg OS_TAG=16.04 --build-arg CUDA_TAG=11.0 --build-arg NPROC=8 --tag alicevision:ubuntu16.04-cuda11.0 -f Dockerfile_ubuntu .
+docker build --build-arg ROCKY_VERSION=9 --build-arg CUDA_TAG=12.1.0 --tag alicevision:rocky9-cuda12.1.0 -f Dockerfile_rocky .
+docker build --build-arg UBUNTU_VERSION=22.04 --build-arg CUDA_TAG=12.1.0 --build-arg NPROC=8 --tag alicevision:ubuntu22.04-cuda12.1.0 -f Dockerfile_ubuntu .
 ```
 
 In order to run the image [nvidia docker](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) is needed.
 
 ```
-docker run -it --runtime=nvidia alicevision:centos7-cuda9.2
+docker run -it --runtime=nvidia alicevision:rocky9-cuda12.1.0
 ```
 
 To retrieve the generated files:
 
 ```
 # Create an instance of the image, copy the files and remove the temporary docker instance.
-CID=$(docker create alicevision:centos7-cuda11.3.1) && docker cp ${CID}:/opt/AliceVision_install . && docker cp ${CID}:/opt/AliceVision_bundle . && docker rm ${CID}
+CID=$(docker create alicevision:rocky9-cuda12.1.0) && docker cp ${CID}:/opt/AliceVision_install . && docker cp ${CID}:/opt/AliceVision_bundle . && docker rm ${CID}
 ```
 
 Environment variable

@@ -59,6 +59,8 @@ class IntrinsicScaleOffsetDisto : public IntrinsicScaleOffset
         }
     }
 
+    static std::shared_ptr<IntrinsicScaleOffsetDisto> cast(std::shared_ptr<IntrinsicBase> sptr);
+
     void assign(const IntrinsicBase& other) override { *this = dynamic_cast<const IntrinsicScaleOffsetDisto&>(other); }
 
     bool operator==(const IntrinsicBase& otherBase) const override;
@@ -104,10 +106,10 @@ class IntrinsicScaleOffsetDisto : public IntrinsicScaleOffset
     }
 
     /// Return the un-distorted pixel (with removed distortion)
-    Vec2 get_ud_pixel(const Vec2& p) const override;
+    Vec2 getUndistortedPixel(const Vec2& p) const override;
 
     /// Return the distorted pixel (with added distortion)
-    Vec2 get_d_pixel(const Vec2& p) const override;
+    Vec2 getDistortedPixel(const Vec2& p) const override;
 
     std::size_t getDistortionParamsSize() const
     {

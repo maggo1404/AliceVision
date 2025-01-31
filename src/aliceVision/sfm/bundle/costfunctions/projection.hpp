@@ -1,108 +1,117 @@
-// Copyright (c) 2023 AliceVision contributors.
+// This file is part of the AliceVision project.
+// Copyright (c) 2024 AliceVision contributors.
+// Copyright (c) 2012 openMVG contributors.
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#pragma once
+
+#include <aliceVision/camera/camera.hpp>
 #include <aliceVision/sfmData/SfMData.hpp>
-#include <aliceVision/geometry/lie.hpp>
-#include <Eigen/Core>
-#include <ceres/ceres.h>
+#include <aliceVision/sfm/bundle/costfunctions/intrinsicsProject.hpp>
+#include <ceres/rotation.h>
+#include "dynamic_cost_function_to_functor.h"
+
+#include <memory>
+
+// Define ceres Cost_functor for each AliceVision camera model
 
 namespace aliceVision {
 namespace sfm {
 
-class CostProjection : public ceres::CostFunction
+struct ProjectionSimpleErrorFunctor
 {
-  public:
-    CostProjection(const sfmData::Observation& measured, const std::shared_ptr<camera::IntrinsicBase>& intrinsics, bool withRig)
-      : _measured(measured),
-        _intrinsics(intrinsics),
-        _withRig(withRig)
-    {
-        set_num_residuals(2);
-
-        mutable_parameter_block_sizes()->push_back(16);
-        mutable_parameter_block_sizes()->push_back(16);
-        mutable_parameter_block_sizes()->push_back(intrinsics->getParams().size());
-        mutable_parameter_block_sizes()->push_back(3);
+    explicit ProjectionSimpleErrorFunctor(const sfmData::Observation& obs, const std::shared_ptr<camera::IntrinsicBase>& intrinsics)        
+    : _intrinsicFunctor(new CostIntrinsicsProject(obs, intrinsics))
+    {        
     }
 
-    bool Evaluate(double const* const* parameters, double* residuals, double** jacobians) const override
-    {
-        const double* parameter_pose = parameters[0];
-        const double* parameter_rig = parameters[1];
-        const double* parameter_intrinsics = parameters[2];
-        const double* parameter_landmark = parameters[3];
+    template<typename T>
+    bool operator()(T const* const* parameters, T* residuals) const
+    {       
+        const T* parameter_intrinsics = parameters[0];
+        const T* parameter_pose = parameters[1];
+        const T* parameter_point = parameters[2];
 
-        const Eigen::Map<const SE3::Matrix> rTo(parameter_pose);
-        const Eigen::Map<const SE3::Matrix> cTr(parameter_rig);
-        const Eigen::Map<const Vec3> pt(parameter_landmark);
+        //--
+        // Apply external parameters (Pose)
+        //--
+        const T* cam_R = parameter_pose;
+        const T* cam_t = &parameter_pose[3];
+        
+        T transformedPoint[3];
+        // Rotate the point according the camera rotation
+        ceres::AngleAxisRotatePoint(cam_R, parameter_point, transformedPoint);
 
-        /*Update intrinsics object with estimated parameters*/
-        size_t params_size = _intrinsics->getParams().size();
-        std::vector<double> params;
-        for (size_t param_id = 0; param_id < params_size; param_id++)
-        {
-            params.push_back(parameter_intrinsics[param_id]);
-        }
-        _intrinsics->updateFromParams(params);
+        // Apply the camera translation
+        transformedPoint[0] += cam_t[0];
+        transformedPoint[1] += cam_t[1];
+        transformedPoint[2] += cam_t[2];
 
-        const SE3::Matrix T = cTr * rTo;
-        const geometry::Pose3 T_pose3(T);
+        const T * innerParameters[2];
+        innerParameters[0] = parameter_intrinsics;
+        innerParameters[1] = transformedPoint;
 
-        const Vec4 pth = pt.homogeneous();
-
-        const Vec2 pt_est = _intrinsics->project(T_pose3, pth, true);
-        const double scale = (_measured.getScale() > 1e-12) ? _measured.getScale() : 1.0;
-
-        residuals[0] = (pt_est(0) - _measured.getX()) / scale;
-        residuals[1] = (pt_est(1) - _measured.getY()) / scale;
-
-        if (jacobians == nullptr)
-        {
-            return true;
-        }
-
-        Eigen::Matrix2d d_res_d_pt_est = Eigen::Matrix2d::Identity() / scale;
-
-        if (jacobians[0] != nullptr)
-        {
-            Eigen::Map<Eigen::Matrix<double, 2, 16, Eigen::RowMajor>> J(jacobians[0]);
-
-            J = d_res_d_pt_est * _intrinsics->getDerivativeProjectWrtPose(T, pth) * getJacobian_AB_wrt_B<4, 4, 4>(cTr, rTo) *
-                getJacobian_AB_wrt_A<4, 4, 4>(Eigen::Matrix4d::Identity(), rTo);
-        }
-
-        if (jacobians[1] != nullptr)
-        {
-            Eigen::Map<Eigen::Matrix<double, 2, 16, Eigen::RowMajor>> J(jacobians[1]);
-
-            J = d_res_d_pt_est * _intrinsics->getDerivativeProjectWrtPose(T, pth) * getJacobian_AB_wrt_A<4, 4, 4>(cTr, rTo) *
-                getJacobian_AB_wrt_A<4, 4, 4>(Eigen::Matrix4d::Identity(), cTr);
-        }
-
-        if (jacobians[2] != nullptr)
-        {
-            Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> J(jacobians[2], 2, params_size);
-
-            J = d_res_d_pt_est * _intrinsics->getDerivativeProjectWrtParams(T, pth);
-        }
-
-        if (jacobians[3] != nullptr)
-        {
-            Eigen::Map<Eigen::Matrix<double, 2, 3, Eigen::RowMajor>> J(jacobians[3]);
-
-            J = d_res_d_pt_est * _intrinsics->getDerivativeProjectWrtPoint(T, pth) * Eigen::Matrix<double, 4, 3>::Identity();
-        }
-
-        return true;
+        return _intrinsicFunctor(innerParameters, residuals);
     }
 
-  private:
-    const sfmData::Observation& _measured;
-    const std::shared_ptr<camera::IntrinsicBase> _intrinsics;
-    bool _withRig;
+    ceres::DynamicCostFunctionToFunctorTmp _intrinsicFunctor;
 };
+
+struct ProjectionErrorFunctor
+{
+    explicit ProjectionErrorFunctor(const sfmData::Observation& obs, const std::shared_ptr<camera::IntrinsicBase>& intrinsics)        
+    : _intrinsicFunctor(new CostIntrinsicsProject(obs, intrinsics))
+    {        
+    }
+
+    template<typename T>
+    bool operator()(T const* const* parameters, T* residuals) const
+    {       
+        const T* parameter_intrinsics = parameters[0];
+        const T* parameter_pose = parameters[1];
+        const T* parameter_subpose = parameters[2];
+        const T* parameter_point = parameters[3];
+
+        T transformedPoint[3];
+        {
+            const T* cam_R = parameter_pose;
+            const T* cam_t = &parameter_pose[3];
+
+            // Rotate the point according the camera rotation
+            ceres::AngleAxisRotatePoint(cam_R, parameter_point, transformedPoint);
+
+            // Apply the camera translation
+            transformedPoint[0] += cam_t[0];
+            transformedPoint[1] += cam_t[1];
+            transformedPoint[2] += cam_t[2];
+        }
+
+        {
+            const T* cam_R = parameter_subpose;
+            const T* cam_t = &parameter_subpose[3];
+
+            // Rotate the point according to the camera rotation
+            T transformedPointBuf[3] = {transformedPoint[0], transformedPoint[1], transformedPoint[2]};
+            ceres::AngleAxisRotatePoint(cam_R, transformedPointBuf, transformedPoint);
+
+            // Apply the camera translation
+            transformedPoint[0] += cam_t[0];
+            transformedPoint[1] += cam_t[1];
+            transformedPoint[2] += cam_t[2];
+        }
+
+        const T * innerParameters[2];
+        innerParameters[0] = parameter_intrinsics;
+        innerParameters[1] = transformedPoint;
+
+        return _intrinsicFunctor(innerParameters, residuals);
+    }
+
+    ceres::DynamicCostFunctionToFunctorTmp _intrinsicFunctor;
+};
+
 
 }  // namespace sfm
 }  // namespace aliceVision

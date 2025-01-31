@@ -8,7 +8,6 @@
 #include "SfMLocalizer.hpp"
 #include <aliceVision/config.hpp>
 #include <aliceVision/sfm/bundle/BundleAdjustmentCeres.hpp>
-#include <aliceVision/sfm/bundle/BundleAdjustmentSymbolicCeres.hpp>
 #include <aliceVision/robustEstimation/ACRansac.hpp>
 #include <aliceVision/robustEstimation/LORansac.hpp>
 #include <aliceVision/robustEstimation/ScoreEvaluator.hpp>
@@ -74,7 +73,7 @@ bool SfMLocalizer::localize(const Pair& imageSize,
             pt2Dundistorted = Mat2X(2, numPts);
             for (std::size_t iPoint = 0; iPoint < numPts; ++iPoint)
             {
-                pt2Dundistorted.col(iPoint) = pinholeCam->get_ud_pixel(resectionData.pt2D.col(iPoint));
+                pt2Dundistorted.col(iPoint) = pinholeCam->getUndistortedPixel(resectionData.pt2D.col(iPoint));
             }
         }
 

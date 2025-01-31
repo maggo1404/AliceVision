@@ -10,6 +10,7 @@
 
 // AliceVision does not support Eigen with alignment, unless C++17 aligned new feature is enabled.
 // So ensure Eigen is used with the correct flags.
+#ifndef SWIG
 #ifndef ALICEVISION_EIGEN_REQUIRE_ALIGNMENT
     #ifndef EIGEN_MAX_ALIGN_BYTES
         #error "EIGEN_MAX_ALIGN_BYTES is not defined"
@@ -22,6 +23,7 @@
     #elif EIGEN_MAX_STATIC_ALIGN_BYTES != 0
         #error "EIGEN_MAX_STATIC_ALIGN_BYTES is defined but not 0"
     #endif
+#endif
 #endif
 
 //--
@@ -385,70 +387,6 @@ inline int is_finite(const double val)
 #endif
 }
 
-/** Get back the min, mean, median and the max
- *  values of an iterable sequence.
- */
-template<typename Type>
-struct BoxStats
-{
-    Type min{}, max{}, mean{}, median{}, firstQuartile{}, thirdQuartile{};
-
-    BoxStats() = default;
-
-    template<typename DataInputIterator>
-    BoxStats(DataInputIterator begin, DataInputIterator end)
-    {
-        compute(begin, end);
-    }
-
-    template<typename DataInputIterator>
-    void compute(DataInputIterator begin, DataInputIterator end)
-    {
-        if (std::distance(begin, end) < 1)
-        {
-            min = 0;
-            max = 0;
-            mean = 0;
-            median = 0;
-            firstQuartile = 0;
-            thirdQuartile = 0;
-            return;
-        }
-
-        std::vector<Type> vec_val(begin, end);
-        std::sort(vec_val.begin(), vec_val.end());
-        min = vec_val[0];
-        max = vec_val[vec_val.size() - 1];
-        mean = accumulate(vec_val.begin(), vec_val.end(), Type(0)) / static_cast<Type>(vec_val.size());
-        median = vec_val[vec_val.size() / 2];
-        firstQuartile = vec_val[vec_val.size() / 4];
-        thirdQuartile = vec_val[(vec_val.size() * 3) / 4];
-    }
-};
-
-template<typename Type>
-inline std::ostream& operator<<(std::ostream& os, const BoxStats<Type> obj)
-{
-    os << "\t min: " << obj.min
-       << "\n"
-          "\t mean: "
-       << obj.mean
-       << "\n"
-          "\t median: "
-       << obj.median
-       << "\n"
-          "\t max: "
-       << obj.max
-       << "\n"
-          "\t first quartile: "
-       << obj.firstQuartile
-       << "\n"
-          "\t third quartile: "
-       << obj.thirdQuartile;
-
-    return os;
-}
-
 /**
  ** Split a range [ a ; b [ into a set of n ranges :
  [ a ; c1 [ U [ c1 ; c2 [ U ... U [ c(n-1) ; b [
@@ -488,6 +426,7 @@ template<class T>
 constexpr T divideRoundUp(T x, T y)
 {
     static_assert(std::is_integral<T>::value, "divideRoundUp only works with integer arguments");
+    assert(y != 0);  // Prevents division by zero
     const auto xPos = x >= 0;
     const auto yPos = y >= 0;
     if (xPos == yPos)

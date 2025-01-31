@@ -11,7 +11,6 @@
 #include <aliceVision/feature/imageDescriberCommon.hpp>
 #include <aliceVision/matching/IndMatch.hpp>
 #include <aliceVision/stl/FlatMap.hpp>
-#include <aliceVision/stl/FlatSet.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -20,6 +19,7 @@
 #include <set>
 #include <map>
 #include <memory>
+#include <aliceVision/numeric/numeric.hpp>
 
 namespace aliceVision {
 namespace track {
@@ -59,6 +59,8 @@ inline std::ostream& operator<<(std::ostream& os, const KeypointId& k)
 struct TrackItem
 {
     std::size_t featureId;
+    Vec2 coords;
+    double scale;
 };
 
 /**
@@ -68,14 +70,14 @@ struct TrackItem
 struct Track
 {
     /// Data structure to store a track: collection of {ViewId, FeatureId}
-    using FeatureIdPerView = stl::flat_map<std::size_t, TrackItem>;
+    using TrackInfoPerView = stl::flat_map<std::size_t, TrackItem>;
 
     Track() {}
 
     /// Descriptor type
     feature::EImageDescriberType descType = feature::EImageDescriberType::UNINITIALIZED;
     /// Collection of matched features between views: {ViewId, FeatureId}
-    FeatureIdPerView featPerView;
+    TrackInfoPerView featPerView;
 };
 
 /// A track is a collection of {trackId, Track}

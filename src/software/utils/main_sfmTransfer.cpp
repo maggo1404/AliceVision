@@ -36,6 +36,7 @@ enum class EMatchingMethod : unsigned char
     FROM_VIEWID = 0,
     FROM_FILEPATH,
     FROM_METADATA,
+    FROM_POSEID,
     FROM_INTRINSICID
 };
 
@@ -54,6 +55,8 @@ std::string EMatchingMethod_enumToString(EMatchingMethod alignmentMethod)
             return "from_filepath";
         case EMatchingMethod::FROM_METADATA:
             return "from_metadata";
+        case EMatchingMethod::FROM_POSEID:
+            return "from_poseid";
         case EMatchingMethod::FROM_INTRINSICID:
             return "from_intrinsicid";
     }
@@ -76,6 +79,8 @@ EMatchingMethod EMatchingMethod_stringToEnum(const std::string& alignmentMethod)
         return EMatchingMethod::FROM_FILEPATH;
     if (method == "from_metadata")
         return EMatchingMethod::FROM_METADATA;
+    if (method == "from_poseid")
+        return EMatchingMethod::FROM_POSEID;
     if (method == "from_intrinsicid")
         return EMatchingMethod::FROM_INTRINSICID;
     throw std::out_of_range("Invalid SfM alignment method : " + alignmentMethod);
@@ -83,8 +88,7 @@ EMatchingMethod EMatchingMethod_stringToEnum(const std::string& alignmentMethod)
 
 inline std::istream& operator>>(std::istream& in, EMatchingMethod& alignment)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     alignment = EMatchingMethod_stringToEnum(token);
     return in;
 }
@@ -185,6 +189,10 @@ int aliceVision_main(int argc, char** argv)
             sfm::matchViewsByMetadataMatching(sfmData, sfmDataRef, metadataMatchingList, commonViewIds);
             break;
         }
+        case EMatchingMethod::FROM_POSEID:
+        {
+            break;
+        }
         case EMatchingMethod::FROM_INTRINSICID:
         {
             break;
@@ -203,6 +211,18 @@ int aliceVision_main(int argc, char** argv)
                     intrinsic.second->updateFromParams(intrinsicRef.second->getParams());
                     break;
                 }
+            }
+        }
+    }
+    else if (matchingMethod == EMatchingMethod::FROM_POSEID)
+    {
+        for (auto& view : sfmData.getViews())
+        {
+            auto pose = sfmDataRef.getPoses().find(view.second->getPoseId());
+            if (pose != sfmDataRef.getPoses().end())
+            {
+                view.second->setPoseId(pose->first);
+                sfmData.getPoses()[pose->first] = pose->second;
             }
         }
     }
@@ -304,7 +324,7 @@ int aliceVision_main(int argc, char** argv)
                             commonViewsMap.emplace(viewPair.second, viewPair.first);
                         }
 
-                        HashMap<IndexT, aliceVision::sfmData::Landmark> newLandmarks;
+                        std::map<IndexT, aliceVision::sfmData::Landmark> newLandmarks;
                         for (const auto& landIt : refLandmarks)
                         {
                             // Copy of the current landmark :

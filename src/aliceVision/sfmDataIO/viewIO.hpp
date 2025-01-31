@@ -50,8 +50,7 @@ inline std::ostream& operator<<(std::ostream& os, EViewIdMethod s) { return os <
 
 inline std::istream& operator>>(std::istream& in, EViewIdMethod& s)
 {
-    std::string token;
-    in >> token;
+    std::string token(std::istreambuf_iterator<char>(in), {});
     s = EViewIdMethod_stringToEnum(token);
     return in;
 }
@@ -67,6 +66,7 @@ void updateIncompleteView(sfmData::View& view, EViewIdMethod viewIdMethod = EVie
 /**
  * @brief create an intrinsic for the given View
  * @param[in] view The given view
+ * @param[in] intrinsicInitMode validity flags
  * @param[in] mmFocalLength (-1 if unknown)
  * @param[in] sensorWidth (-1 if unknown)
  * @param[in] defaultFocalLength (-1 if unknown)
@@ -76,10 +76,10 @@ void updateIncompleteView(sfmData::View& view, EViewIdMethod viewIdMethod = EVie
  * @param[in] defaultOffsetY
  * @param[in] lensParam Lens data from LCP file
  * @param[in] defaultIntrinsicType (unknown by default)
- * @param[in] allowedEintrinsics The intrinsics values that can be attributed
  * @return shared_ptr IntrinsicBase
  */
 std::shared_ptr<camera::IntrinsicBase> getViewIntrinsic(const sfmData::View& view,
+                                                        const camera::EInitMode intrinsicInitMode,
                                                         double mmFocalLength = -1.0,
                                                         double sensorWidth = -1,
                                                         double defaultFocalLength = -1,
@@ -89,7 +89,7 @@ std::shared_ptr<camera::IntrinsicBase> getViewIntrinsic(const sfmData::View& vie
                                                         double defaultOffsetY = 0.0,
                                                         LensParam* lensParam = nullptr,
                                                         camera::EINTRINSIC defaultIntrinsicType = camera::EINTRINSIC::UNKNOWN,
-                                                        camera::EINTRINSIC allowedEintrinsics = camera::EINTRINSIC::VALID_CAMERA_MODEL);
+                                                        camera::EDISTORTION defaultDistortionType = camera::EDISTORTION::DISTORTION_NONE);
 
 /**
  * @brief Allows you to retrieve the files paths corresponding to a view by searching through a list of folders.

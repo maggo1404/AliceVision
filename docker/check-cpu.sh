@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # This script is used to check the amount of available memory to ensure 2 GB of memory per process.
-# If the number of processes is greater than the amount of available memory (considering 2 GB per core) we restrict the number of cores to use.
+# If the number of processes is greater than the amount of available memory (considering 2 GB per core) we restrict the number of parallel make jobs to avoid resource contention. 
 #
 # Sample usage:
 # CPU_CORES=`check-cpu.sh`

@@ -20,6 +20,7 @@
 #include <string>
 #include <regex>
 #include <iostream>
+#include <fstream>
 #include <list>
 
 #include <boost/property_tree/ptree.hpp>
@@ -239,7 +240,7 @@ int aliceVision_main(int argc, char** argv)
                     std::shared_ptr<camera::Pinhole> camera = std::dynamic_pointer_cast<camera::Pinhole>(intrinsic);
                     if (camera == nullptr)
                     {
-                        camera = camera::createPinhole(camera::EINTRINSIC::PINHOLE_CAMERA);
+                        camera = camera::createPinhole(camera::EDISTORTION::DISTORTION_NONE, camera::EUNDISTORTION::UNDISTORTION_NONE);
                         camera->copyFrom(*intrinsic);
                         sfmData.getIntrinsics().at(view.getIntrinsicId()) = camera;
                     }
@@ -266,7 +267,7 @@ int aliceVision_main(int argc, char** argv)
                     std::shared_ptr<camera::Pinhole> camera = std::dynamic_pointer_cast<camera::Pinhole>(intrinsic);
                     if (camera == nullptr)
                     {
-                        camera = camera::createPinhole(camera::EINTRINSIC::PINHOLE_CAMERA);
+                        camera = camera::createPinhole(camera::EDISTORTION::DISTORTION_NONE, camera::EUNDISTORTION::UNDISTORTION_NONE);
                         camera->copyFrom(*intrinsic);
                         sfmData.getIntrinsics().at(view.getIntrinsicId()) = camera;
                     }

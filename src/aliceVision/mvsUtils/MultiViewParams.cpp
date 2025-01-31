@@ -38,7 +38,7 @@ MultiViewParams::MultiViewParams(const sfmData::SfMData& sfmData,
                                  const std::string& imagesFolder,
                                  const std::string& depthMapsFolder,
                                  const std::string& depthMapsFilterFolder,
-                                 bool readFromDepthMaps,
+                                 mvsUtils::EFileType fileType,
                                  int downscale)
   : _sfmData(sfmData),
     _imagesFolder(imagesFolder + "/"),
@@ -58,12 +58,12 @@ MultiViewParams::MultiViewParams(const sfmData::SfMData& sfmData,
         {
             const sfmData::View& view = *(viewPair.second.get());
 
-            if (!sfmData.isPoseAndIntrinsicDefined(&view))
+            if (!sfmData.isPoseAndIntrinsicDefined(view))
                 continue;
 
             std::string path = view.getImage().getImagePath();
 
-            if (readFromDepthMaps)
+            if (fileType == mvsUtils::EFileType::depthMap)
             {
                 if (depthMapsFolder.empty())
                 {
@@ -75,6 +75,10 @@ MultiViewParams::MultiViewParams(const sfmData::SfMData& sfmData,
                     // use output of depth map estimation
                     path = getFileNameFromViewId(*this, view.getViewId(), mvsUtils::EFileType::depthMap);
                 }
+            }
+            else if (fileType == mvsUtils::EFileType::normalMap)
+            {
+                path = getFileNameFromViewId(*this, view.getViewId(), mvsUtils::EFileType::normalMap);
             }
             else if (_imagesFolder != "/" && !_imagesFolder.empty() && fs::is_directory(_imagesFolder) && !fs::is_empty(_imagesFolder))
             {
@@ -122,7 +126,7 @@ MultiViewParams::MultiViewParams(const sfmData::SfMData& sfmData,
         oiio::ParamValueList::const_iterator scaleIt = metadata.end();
         oiio::ParamValueList::const_iterator pIt = metadata.end();
 
-        const bool fileExists = fs::exists(imgParams.path);
+        const bool fileExists = utils::exists(imgParams.path);
         if (fileExists)
         {
             metadata = image::readImageMetadata(imgParams.path);
@@ -168,7 +172,7 @@ MultiViewParams::MultiViewParams(const sfmData::SfMData& sfmData,
             const std::string fileNameP = getFileNameFromIndex(*this, i, EFileType::P);
             const std::string fileNameD = getFileNameFromIndex(*this, i, EFileType::D);
 
-            if (fs::exists(fileNameP) && fs::exists(fileNameD))
+            if (utils::exists(fileNameP) && utils::exists(fileNameD))
             {
                 ALICEVISION_LOG_DEBUG("Reading view " << getViewId(i) << " projection matrix from file '" << fileNameP << "'.");
 
@@ -234,7 +238,7 @@ MultiViewParams::MultiViewParams(const sfmData::SfMData& sfmData,
 
 void MultiViewParams::loadMatricesFromTxtFile(int index, const std::string& fileNameP, const std::string& fileNameD)
 {
-    if (!fs::exists(fileNameP))
+    if (!utils::exists(fileNameP))
         throw std::runtime_error(std::string("mv_multiview_params: no such file: ") + fileNameP);
 
     std::ifstream in{fileNameP};
@@ -269,7 +273,7 @@ void MultiViewParams::loadMatricesFromTxtFile(int index, const std::string& file
     iRArr[index] = RArr[index].inverse();
     iCamArr[index] = iRArr[index] * iKArr[index];
 
-    if (fs::exists(fileNameD))
+    if (utils::exists(fileNameD))
     {
         std::ifstream inD{fileNameD};
         inD >> FocK1K2Arr[index].x >> FocK1K2Arr[index].y >> FocK1K2Arr[index].z;
@@ -301,13 +305,13 @@ void MultiViewParams::loadMatricesFromSfM(int index)
 
     std::shared_ptr<camera::IntrinsicBase> ptrIntrinsic = intrinsicIt->second;
     std::shared_ptr<camera::Pinhole> ptrPinHole = std::dynamic_pointer_cast<camera::Pinhole>(ptrIntrinsic);
-    if (!ptrPinHole)
+
+    Mat34 P = _sfmData.getPose(view).getTransform().getHomogeneous().block<3, 4>(0, 0);
+    if (ptrPinHole)
     {
-        ALICEVISION_LOG_ERROR("Camera is not pinhole in loadMatricesFromRawProjectionMatrix");
-        return;
+        P = ptrPinHole->getProjectiveEquivalent(_sfmData.getPose(view).getTransform());        
     }
 
-    const Mat34 P = ptrPinHole->getProjectiveEquivalent(_sfmData.getPose(view).getTransform());
     std::vector<double> vP(P.size());
     Eigen::Map<RowMatrixXd>(vP.data(), P.rows(), P.cols()) = P;
 
@@ -484,7 +488,7 @@ bool MultiViewParams::isPixelInSourceImage(const Pixel& pixRC, int camId, int ma
     const camera::IntrinsicBase* intrinsicPtr = _sfmData.getIntrinsicPtr(view.getIntrinsicId());
 
     const double s = getDownscaleFactor(camId);
-    Vec2 pix_disto = intrinsicPtr->get_d_pixel({pixRC.x * s, pixRC.y * s}) / s;
+    Vec2 pix_disto = intrinsicPtr->getDistortedPixel({pixRC.x * s, pixRC.y * s}) / s;
     return isPixelInImage(Pixel(pix_disto.x(), pix_disto.y()), camId, margin);
 }
 
